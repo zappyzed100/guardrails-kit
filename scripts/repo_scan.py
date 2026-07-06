@@ -438,6 +438,19 @@ REQUIRED_PATHS = [
     "tests/guard_corpus.tsv",
 ]
 
+# --- キット原本自身の判定（§3.3 kit-source-exempt — v2.14・Phase 27）---
+# install_kit.py の META_FILES に同居（配布物からは常に除外——バイトコピーされる
+# scripts/repo_scan.py 自体にフラグを持たせると導入先にも複製され判定が骨抜きになるため、
+# 「配布されないファイルの有無」という構造的シグナルだけを見る — G9）。
+KIT_SOURCE_MARKER = ".guardrails-kit-source"
+
+
+def is_kit_source_repo(tracked: set[str]) -> bool:
+    """このチェックアウトがキット原本自身か（導入先での Step 1 未着手と区別するための
+    明示マーカー——構造だけでは両者が同型になるため推測に頼らない — §3.3）。"""
+    return KIT_SOURCE_MARKER in tracked
+
+
 # --- コミット規模の soft 上限（§3.4 検査7 commit-too-large — v2.13・Phase 26）---
 # 1コミットの純変更行数（追加+削除。生成物・lockfile 除外）がこれを超えたら soft 警告。
 # 出典: 著名ワークフローの収斂（Superpowers「2〜5分粒度のタスク」・小さな反復の一般則）
