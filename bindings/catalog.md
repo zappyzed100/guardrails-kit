@@ -1,0 +1,451 @@
+# catalog.md — 検証済みバインディング列のカタログ（GUARDRAILS.md §12.7 の正本）
+
+> **このファイルの役割**: 言語・スタックごとの「検証済みの穴埋め値」を列として蓄積する場所。
+> 契約（GUARDRAILS.md §1〜§9・§12）は言語なし、**具象値はすべてここ**。
+> 新規リポジトリのブートストラップ（§11）は「列を選ぶ → paste-block を所定の場所へ貼る →
+> 全対象ファイルに `BINDING-SOURCE: 列ID@版` を刻印する」だけになる（G13: 移植の定数時間）。
+>
+> **検証状態の定義**:
+> - **実測済み** = そのプロジェクトで違反注入込みのDoDを通過した値（列末尾に実測元を記録）。
+> - **要実測** = 標準的な値だが、初回採用リポジトリの Step で成功系と違反注入の両方を
+>   実測してから「実測済み」へ昇格させる（完了=実行結果 — §10 実行規律）。
+> - 値を修正したら版を上げる（`@1` → `@2`）。**列の値を採用先で黙って変えない**——
+>   変えたくなったら新しい版としてここに戻す（G5: 単一の正）。
+>
+> **新しい列の起こし方**: 下のスキーマ表の全行を埋める（空欄不可・「該当なし」は可）。
+> 例の値のコピペで埋めた気になるのは禁止（§11 Step 0 と同じ規律）。
+
+## スキーマ（列が埋めるべき行の一覧）
+
+| 区分 | 行 |
+|---|---|
+| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
+| ランタイム（表D — §12） | `up`／`reset`（seed込み）／`seed`／`time`（時刻注入）／`db`（DB読み）／`e2e`／操作レール（実UI操作の手段）／観察レール（コンソール・ネットワーク・ログの読み方）／UIテストID検査（`ui-missing-testid`）／外部I/Oシームの置き場所 |
+| paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.sh` case／**`post_edit_lint.sh` case（v2.5）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
+
+### 「非推奨・世代交代パターン」の出典規律（v2.6 — §3.3 deprecated-api の列を埋める時の正本）
+
+列値に採ってよい出典の優先順位:
+1. **ベンダー公式の AI プロンプト**（例: Supabase の「MUST NOT generate」リスト）
+2. **公式の非推奨告知**（例: Python 3.12 の `datetime.utcnow` 非推奨）
+3. コミュニティ由来（.mdc 集等）——**①②のみ初期値に採り、③は採用先での実測後に還元**する。
+
+**正規表現で近似できない構文世代**（例: Next.js 15 の await params のような構文レベルの
+移行）**は列に入れない**——偽陽性 > 価値（§7.4「近似は仕様」の範囲を超えるものは対象外）。
+各パターンのラベルには**代替 API を必ず書く**（違反者がラベルだけで直せる形 — G4）。
+
+### MCP・エコシステム採用規律（v2.11 — **2026-07-07 調査**の判定。§3.3 `mcp-not-allowed` の許可リスト `MCP_ALLOWED_SERVERS` を増やす時の正本）
+
+採用は次の**ゲート3条をすべて**通し、判定（不採用も）を本注記か §10 に記録してから:
+1. **重複排除（G5/G2）**: ネイティブツール・汎用 CLI（例: GitHub は `gh`）・キットの既存
+   機構（dev.py 動詞・STRUCTURE.md・§12 レール）で同役が果たせるなら不採用。逆転条件は
+   「**実測で**明らかに性能が大きい」のみ（伝聞・宣伝は根拠にしない——完了=実行結果）。
+2. **常駐予算（G3）**: ツール定義は接続だけでコンテキストを消費する（実測例: GitHub MCP
+   フル 93 ツール ≈ 42〜55k トークン。Tool Search 既定有効でも出力・誤選択・管理の
+   コストは残る）。スポット用途は `.mcp.json` に入れず **タスク単位の
+   `claude mcp add/remove`** に格下げする（常駐させない判断も記録する）。
+3. **契約整合（G7/G5/§13）**: 書込可能ツールは門（§2/§3）の外の変更経路——原則不採用か
+   read-only 限定。メモリファイルを生やすものは §13「中央メモ禁止」と衝突。外部内容を
+   読み込むものは注入面（例: GitHub MCP の toxic agent flow 実証 2025-05）を判定に含める。
+
+**現在の採用状態（2026-07-07）**: 常駐は **Playwright MCP のみ**（Web 列の操作レール
+§12.4——本ファイル ts-react-web 列の `.mcp.json` paste-block が実体）。保留4件
+（Chrome DevTools MCP・Context7・Serena・Skills 化）はトリガー付きで GUARDRAILS.md §10
+保留節、不採用の判定表は README v2.11 が転記先。調査の再実施時は本注記の日付を更新する。
+
+---
+
+## 列: ts-react-web@6 — TypeScript + React（Web/PWA・Vite・Supabase想定）【要実測】
+
+> @6（v2.10）: 注釈の参照先を「AGENTS.md §7」へ機械改名（章の移設に追随・コマンド値の変更なし — Phase 22）。
+> @5（v2.7）: 「単一テストファイル実行」の1行と paste-block 2箇所（repo_scan・red-first ジョブ BINDING）を追加。
+> @4（v2.6）: 「非推奨・世代交代パターン」「設計根拠の対象レイヤー」の2行と paste-block の追記（値の変更＝版上げ — 本書運用ルール）。
+> @3（v2.5）: 「編集直後 lint」「依存マニフェスト」の2行と `post_edit_lint.sh` paste-block を追加。
+
+前提ツール: Node.js（npm/npx）・Supabase CLI（ローカルDB使う場合）・Playwright。
+
+| 行 | 値 |
+|---|---|
+| 整形（冪等） | `npx prettier --write <file>` |
+| 編集直後 lint | `npx --no-install eslint --max-warnings=0 <file>`（rc=1 のみブロック。下の paste-block） |
+| 静的解析 | `npx tsc --noEmit` ＋ `npx eslint .` |
+| lint昇格 | eslint: `no-console: error`（`src/lib/log.ts` のみ off）・`no-empty: error` |
+| テスト | `npx vitest run` |
+| E2E | `npx playwright test` |
+| print系直呼び | `console.log(` `console.info(` `console.debug(`（出口: `src/lib/log.ts`） |
+| ログ単一出口 | `src/lib/log.ts` の `logOp(tag, op, detail, {error, elapsedMs})`（形式は AGENTS.md §7） |
+| テスト内 非決定 | `Date.now(` ・ `new Date()`（引数なし）・ `Math.random(`（Clock/seed注入で代替） |
+| テスト内 外部I/O | `fetch(` `axios` `XMLHttpRequest`（フェイク/記録済みフィクスチャを注入） |
+| 非推奨・世代交代パターン | `@supabase/auth-helpers-nextjs` の import（公式非推奨——`@supabase/ssr` へ移行。Supabase 公式 AI プロンプトの生成禁止指定＝出典①②）。**サーバー側 `getSession(`→`getUser()` は本列では対象外**——本列はブラウザ SPA で、クライアントの `getSession()` は正規 API のため偽陽性>価値（Phase 15 の基準。SSR / Edge Functions を持つ列を起こす時にそちらへ載せる——判断ごと記録） |
+| テスト判別 | `\.test\.tsx?$` ・ `^e2e/.*\.spec\.ts$`（**E2E specを含める＝fix⇔テスト対の対象 — G10**） |
+| 単一テストファイル実行 | `npx vitest run {file}`（cwd=ルート。E2E spec（playwright）が対象になった場合は vitest 上で実行エラー＝赤側に倒れる——近似は仕様 §7.4・境界は §5） |
+| 依存マニフェスト | `package.json`（dependencies / devDependencies）— 既定表に同梱済み（確認のみ・追記不要） |
+| 設計根拠の対象レイヤー | `src`（`PLAN_LAYER_ROOTS`。plan の置き場は既定の `plan.md` / `docs/plans/` — §3.4 検査5） |
+| 生成物 | `src/types/supabase.ts` 等の型生成物（`supabase gen types` の出力先） |
+| `up` | `supabase start`（または `docker compose up -d`）＋ `npm run dev -- --port 5173` は別端末 |
+| `reset` | `supabase db reset`（seed.sql を含む＝reset=seed込み — §12.2） |
+| `time` | `.env.local` の `VITE_TIME_FREEZE` を書き換え、アプリは Clock 抽象がこれを読む（§12.2） |
+| `db` | `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -c "{args}"` |
+| 操作レール | **Playwright MCP**（実ブラウザ。アクセシビリティスナップショットでUIを読む — §12.4） |
+| 観察レール | Playwright MCP のコンソール/ネットワーク読取・`dev.py db`・`supabase logs` |
+| UIテストID | 対象 `\.tsx$`・要素 `<(button|a|input|select|textarea|[A-Z]\w*)\b[^>]*on(Click|Submit|Change)=[^>]*>`・属性 `data-testid\s*=` |
+| 外部I/Oシーム | `src/lib/api/` 配下に集約（fetch直呼びをUI層に書かない） |
+
+**paste-block（`scripts/repo_scan.py` BINDING へ）**:
+
+```python
+CODE_EXTS |= {".ts", ".tsx"}
+HEADER_REQUIRED_EXTS |= {".ts", ".tsx"}
+TEST_PATH_PATTERNS += [re.compile(p) for p in (r"\.test\.tsx?$", r"^e2e/.*\.spec\.ts$")]
+GENERATED_PATTERNS += [re.compile(r"^src/types/supabase\.ts$")]
+_TS_SLEEP = [(re.compile(r"\bsetTimeout\s*\(|\bsleep\s*\("), "setTimeout/sleep")]
+SLEEP_PATTERNS[".ts"] = _TS_SLEEP; SLEEP_PATTERNS[".tsx"] = _TS_SLEEP
+_TS_NONDET = [(re.compile(r"\bDate\.now\s*\("), "Date.now()（Clock抽象で注入する）"),
+              (re.compile(r"\bnew Date\s*\(\s*\)"), "引数なし new Date()（固定時刻を渡す）"),
+              (re.compile(r"\bMath\.random\s*\("), "Math.random()（seed付き乱数を注入する）")]
+NONDETERMINISM_PATTERNS[".ts"] = _TS_NONDET; NONDETERMINISM_PATTERNS[".tsx"] = _TS_NONDET
+_TS_NET = [(re.compile(r"\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b"), "fetch/axios/XHR")]
+TEST_NETWORK_PATTERNS[".ts"] = _TS_NET; TEST_NETWORK_PATTERNS[".tsx"] = _TS_NET
+_TS_PRINT = [(re.compile(r"\bconsole\.(log|info|debug)\s*\("), "console.*(")]
+PRINT_CALL_PATTERNS[".ts"] = _TS_PRINT; PRINT_CALL_PATTERNS[".tsx"] = _TS_PRINT
+LOG_EXIT_FILES |= {"src/lib/log.ts"}
+UI_TESTID_RULES += [(re.compile(r"\.tsx$"),
+                     re.compile(r"<(?:button|a|input|select|textarea|[A-Z]\w*)\b[^>]*on(?:Click|Submit|Change)=[^>]*>"),
+                     re.compile(r"data-testid\s*="),
+                     "React操作要素")]
+ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config")]),
+                     (["src/"], ".tsx", [re.compile(r"(^|/)main\.tsx?$")])]
+IMPORT_TARGET_EXTRACTORS[".ts"] = _ts_import_targets
+IMPORT_TARGET_EXTRACTORS[".tsx"] = _ts_import_targets
+SYMBOL_EXTRACTORS[".ts"] = _ts_public_symbols
+SYMBOL_EXTRACTORS[".tsx"] = _ts_public_symbols
+_TS_DEPRECATED = [(re.compile(r"@supabase/auth-helpers-nextjs"),
+                   "@supabase/auth-helpers-nextjs（公式非推奨。@supabase/ssr へ移行 — 出典①②）")]
+DEPRECATED_PATTERNS[".ts"] = _TS_DEPRECATED; DEPRECATED_PATTERNS[".tsx"] = _TS_DEPRECATED
+PLAN_LAYER_ROOTS += ["src"]
+SINGLE_TEST_COMMAND = ["npx", "vitest", "run", "{file}"]   # 単一スロット（併用時はプライマリ列のみ — §5）
+```
+
+**paste-block（`scripts/dev.py` COMMANDS へ）**:
+
+```python
+COMMANDS = {
+    "up":    [["supabase", "start"]],
+    "reset": [["supabase", "db", "reset"]],
+    "seed":  [["supabase", "db", "reset"]],
+    "time":  [["uv", "run", "scripts/set_time.py", "{args}"]],  # .env.local の VITE_TIME_FREEZE を書く小物（Step 8b で作成）
+    "test":  [["npx", "vitest", "run"]],
+    "e2e":   [["npx", "playwright", "test"]],
+    "fmt":   [["npx", "prettier", "--write", "."]],
+    "check": [["uv", "run", "scripts/check_structure.py"]],
+    "db":    [["psql", "postgresql://postgres:postgres@127.0.0.1:54322/postgres", "-c", "{args}"]],
+}
+```
+
+**paste-block（`post_edit_format.sh` の case へ）**:
+
+```bash
+  *.ts|*.tsx)
+    command -v npx >/dev/null 2>&1 || exit 0
+    if ! err=$(npx prettier --write "$file_path" 2>&1 >/dev/null); then
+      printf 'prettier が失敗（構文エラーの可能性）。直後に修正すること:\n%s\n' "$err" >&2
+      exit 2
+    fi
+    ;;
+```
+
+**paste-block（`post_edit_lint.sh` の case へ — v2.5）**:
+
+```bash
+  *.ts|*.tsx|*.js|*.jsx)
+    if command -v npx >/dev/null 2>&1; then
+      npx --no-install eslint --max-warnings=0 "$file_path" 1>&2
+      rc=$?
+      [ "$rc" -eq 1 ] && exit 2   # 1 = 違反あり（stderr が Claude へ渡り即修正 — §1）
+      if [ "$rc" -ge 2 ]; then    # 2以上 = 実行不能（未導入・設定不足）。ブロックしない
+        echo "[post-edit-lint] eslint を実行できない（rc=$rc）ため素通し: push 段で回収される" >&2
+      fi
+    else
+      echo "[post-edit-lint] lint 未導入のため素通し（npx が無い）: push 段の CI で回収される" >&2
+    fi
+    ;;
+```
+
+**paste-block（`.pre-commit-config.yaml` の BINDING へ）**:
+
+```yaml
+      - id: tsc
+        name: "tsc --noEmit (pre-push — §4)"
+        entry: bash -c 'npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: eslint
+        name: "eslint (pre-push — §4)"
+        entry: bash -c 'npx eslint .'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: vitest
+        name: "vitest run (pre-push — §4)"
+        entry: bash -c 'npx vitest run'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+```
+
+**paste-block（`guardrails-ci.yml` の BINDING へ）**:
+
+```yaml
+  ts-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npx vitest run
+
+  e2e:   # §12.4 の操作レールを PR の赤/緑へ変換（Step 8b DoD）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: supabase/setup-cli@v1
+      - run: supabase start
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+```
+
+**paste-block（`guardrails-ci.yml` red-first ジョブの BINDING へ — v2.7）**:
+
+```yaml
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+```
+
+**paste-block（リポジトリ直下 `.mcp.json` — 操作レール）**:
+
+```json
+{
+  "mcpServers": {
+    "playwright": { "command": "npx", "args": ["@playwright/mcp@latest"] }
+  }
+}
+```
+
+---
+
+## 列: python-uv@5 — Python（uv・CLI/バックエンド）【要実測】
+
+> @5（v2.7）: 「単一テストファイル実行」の1行と paste-block 1行を追加。red-first の機構自体は本キットの DoD で python 系フィクスチャにより実測済み（親でも緑の fix→`red-first-green` 1行／親で赤→証明1行／EXEMPT→免除1行）。
+> @4（v2.6）: 「非推奨・世代交代パターン」「設計根拠の対象レイヤー」の2行と paste-block の追記。deprecated-api の paste-block は本キットの DoD で実測済み（`utcnow(` 注入→`HARD:deprecated-api` 1行・除去→沈黙・未走査拡張子注入→`binding-dead-pattern`・70ms）。
+> @3（v2.5）: 「編集直後 lint」「依存マニフェスト」の2行と `post_edit_lint.sh` paste-block を追加。lint paste-block は本キットの DoD で実測済み（違反→exit 2＋stderr／クリーン→0／uvx 不在・実行不能→表示素通し／62ms）。
+
+前提ツール: uv のみ（Python 自体も uv が解決 — §7.1）。
+
+| 行 | 値 |
+|---|---|
+| 整形（冪等） | `uvx ruff format <file>` |
+| 編集直後 lint | `uvx ruff check <file>`（rc=1 のみブロック。下の paste-block） |
+| 静的解析 | `uvx ruff check .` |
+| lint昇格 | ruff: `T201`（print）・`E722`（裸except）を select に含める |
+| テスト | `uv run pytest -q` |
+| E2E | CLI なら subprocess 経由の統合テスト（操作レール=そのまま実行） |
+| print系直呼び | `print(`（出口: `src/<pkg>/log.py`） |
+| テスト内 非決定 | `time.time(` `datetime.now(` `random.random(` `random.randint(`（seed/Clock注入） |
+| テスト内 外部I/O | `requests.` `httpx.` `urllib.request` |
+| 非推奨・世代交代パターン | `utcnow(`・`utcfromtimestamp(`（Python 3.12 で公式非推奨＝出典②。代替: `datetime.now(timezone.utc)` / `datetime.fromtimestamp(ts, timezone.utc)`） |
+| テスト判別 | `^tests/` ・ `_test\.py$` ・ `test_.*\.py$` |
+| 単一テストファイル実行 | `uv run pytest {file}`（cwd=ルート。red-first ジョブの BINDING 追加セットアップは不要——setup-uv で足りる — §5） |
+| 依存マニフェスト | `pyproject.toml`（project.dependencies）— 既定表に同梱済み（確認のみ・追記不要） |
+| 設計根拠の対象レイヤー | `src`（`PLAN_LAYER_ROOTS` — §3.4 検査5） |
+| `up`/`reset`/`seed`/`time`/`db` | 構成依存（DBを持つならDBの reset/seed を配線。持たないなら「該当なし」） |
+| 操作レール | subprocess で本体CLIを叩く（ブラウザ不要のためMCP不要） |
+| 観察レール | stdout/stderr＋単一出口ログ |
+
+**paste-block（`scripts/repo_scan.py` BINDING へ）**:
+
+```python
+CODE_EXTS |= {".py"}
+TEST_PATH_PATTERNS += [re.compile(p) for p in (r"^tests/", r"_test\.py$", r"(^|/)test_[^/]+\.py$")]
+SLEEP_PATTERNS[".py"] = [(re.compile(r"\btime\.sleep\s*\("), "time.sleep")]
+NONDETERMINISM_PATTERNS[".py"] = [
+    (re.compile(r"\bdatetime\.now\s*\(|\btime\.time\s*\("), "現在時刻（Clock/引数で注入する）"),
+    (re.compile(r"\brandom\.(random|randint|choice)\s*\("), "seedなし乱数（Random(seed)を注入する）")]
+TEST_NETWORK_PATTERNS[".py"] = [
+    (re.compile(r"\brequests\.|\bhttpx\.|\burllib\.request"), "requests/httpx/urllib")]
+PRINT_CALL_PATTERNS[".py"] = [(re.compile(r"(?<![\w.])print\s*\("), "print(")]
+DEPRECATED_PATTERNS[".py"] = [
+    (re.compile(r"\butcnow\s*\("), "datetime.utcnow()（3.12 で非推奨。datetime.now(timezone.utc) へ）"),
+    (re.compile(r"\butcfromtimestamp\s*\("), "datetime.utcfromtimestamp()（3.12 で非推奨。fromtimestamp(ts, timezone.utc) へ）")]
+PLAN_LAYER_ROOTS += ["src"]
+SINGLE_TEST_COMMAND = ["uv", "run", "pytest", "{file}"]   # 単一スロット（併用時はプライマリ列のみ — §5）
+LOG_EXIT_FILES |= {"src/log.py"}   # 実パスへ調整（scripts/ 配下は LOG_EXIT_PREFIXES が既定除外 — §3.3）
+# ORPHAN_UNIVERSES は既定のまま不発（Pythonのimport解決は近似が粗い。必要なら列を版上げ）
+# SYMBOL_EXTRACTORS[".py"] は出荷既定で有効（キット自身の索引のため）——追記不要
+```
+
+`dev.py` COMMANDS: `test=[["uv","run","pytest","-q"]]`・`fmt=[["uvx","ruff","format","."]]`、
+残りは構成依存で充填。pre-push/CI は ruff check・pytest を ts 列と同じ形で並べる。
+`post_edit_format.sh` case: `*.py)` → `uvx ruff format "$file_path"`（キットの `scripts/*.py` にも当たる）。
+
+**paste-block（`post_edit_lint.sh` の case へ — v2.5・実測済み）**:
+
+```bash
+  *.py)
+    if command -v uvx >/dev/null 2>&1; then
+      uvx ruff check "$file_path" 1>&2
+      rc=$?
+      [ "$rc" -eq 1 ] && exit 2   # 1 = 違反あり（stderr が Claude へ渡り即修正 — §1）
+      if [ "$rc" -ge 2 ]; then    # 2以上 = 実行不能（usage error 等）。ブロックしない
+        echo "[post-edit-lint] ruff を実行できない（rc=$rc）ため素通し: push 段で回収される" >&2
+      fi
+    else
+      echo "[post-edit-lint] lint 未導入のため素通し（uvx が無い）: push 段の CI で回収される" >&2
+    fi
+    ;;
+```
+
+---
+
+## 列: dart-flutter@4 — Dart（Flutter・app/ 層）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+
+> @4（v2.7）: 「単一テストファイル実行」の1行と paste-block 2行を追加（多層構成のため cwd スロット `SINGLE_TEST_CWD` を使う——{file} は app/ 相対に展開）【要実測】。
+> @3（v2.6）: 「非推奨・世代交代パターン」（該当なし判断）「設計根拠の対象レイヤー」の2行と paste-block 1行を追加。
+> @2（v2.5）: 「編集直後 lint」「依存マニフェスト」の2行を追加（lint は該当なし判断——判断もカタログに記録する）。
+
+前提ツール: Flutter SDK。実測元: 移植元プロジェクト（シフト最適化アプリ）。
+
+| 行 | 値 |
+|---|---|
+| 整形（冪等） | `dart format <file>` |
+| 編集直後 lint | 該当なし（`dart analyze` は単一ファイルでもアナリシスサーバ起動が3秒予算に収まらない — push 段 §4 で回収） |
+| 静的解析 | `flutter analyze --fatal-infos`（`app/` にて） |
+| lint昇格 | `analysis_options.yaml`: `avoid_print`・`empty_catches` を error 昇格（§8.1） |
+| テスト | `flutter test` |
+| E2E | `flutter test integration_test`（デスクトップは `-d windows` 等） |
+| print系直呼び | `debugPrint(` `print(`（出口: `app/lib/services/log.dart` の `logOp`） |
+| テスト内 非決定 | `DateTime.now()`・引数なし `Random()` |
+| テスト内 外部I/O | `http.get(` `http.post(` `HttpClient(`（フェイク注入） |
+| テスト判別 | `^app/test/`・`^app/integration_test/`・`_test\.dart$` |
+| 単一テストファイル実行 | `flutter test {file}`（`SINGLE_TEST_CWD = "app"`——{file} は app/ 相対に展開。rust 併用時は dart 側を配線し engine/ のテストは対象外1行で見える — §5。red-first ジョブの BINDING: `subosito/flutter-action@v2`）【要実測】 |
+| 非推奨・世代交代パターン | 該当なし（出典①②で裏取りできた初期値が現時点で無い——③コミュニティ由来は初期値にしない＝出典規律。見つけたら版上げで還元） |
+| 依存マニフェスト | `pubspec.yaml`（dependencies / dev_dependencies）— 既定表に同梱済み（確認のみ・追記不要） |
+| 設計根拠の対象レイヤー | `app/lib`（`PLAN_LAYER_ROOTS` — §3.4 検査5） |
+| 生成物 | `.g.dart`・`.freezed.dart`・`frb_generated`・`bridge_generated`・`.dart_tool/` |
+| 操作レール | integration_test（アプリ内貫通）。外部からの実UI操作が要るなら maestro を検討【要実測】 |
+| 観察レール | `flutter logs`＋単一出口 `logOp` |
+
+**paste-block（`scripts/repo_scan.py` BINDING へ）**:
+
+```python
+CODE_EXTS |= {".dart"}
+HEADER_REQUIRED_EXTS |= {".dart"}
+TEST_PATH_PATTERNS += [re.compile(p) for p in (r"^app/test/", r"^app/integration_test/", r"_test\.dart$")]
+GENERATED_PATTERNS += [re.compile(p) for p in (r"\.g\.dart$", r"\.freezed\.dart$",
+                                               r"(^|/)frb_generated", r"(^|/)bridge_generated")]
+SLEEP_PATTERNS[".dart"] = [(re.compile(r"\bFuture\.delayed\b"), "Future.delayed"),
+                           (re.compile(r"\bsleep\s*\("), "sleep()")]
+NONDETERMINISM_PATTERNS[".dart"] = [
+    (re.compile(r"\bDateTime\.now\s*\("), "DateTime.now()（時刻は固定値/Clock抽象で注入する）"),
+    (re.compile(r"\bRandom\s*\(\s*\)"), "seed なし Random()（Random(42) のように seed を固定する）")]
+TEST_NETWORK_PATTERNS[".dart"] = [(re.compile(r"\bhttp\.(get|post)\s*\(|\bHttpClient\s*\("), "http直呼び")]
+PRINT_CALL_PATTERNS[".dart"] = [(re.compile(r"\bdebugPrint\s*\("), "debugPrint("),
+                                (re.compile(r"(?<![\w.$])print\s*\("), "print(")]
+LOG_EXIT_FILES |= {"app/lib/services/log.dart"}
+ORPHAN_UNIVERSES += [(["app/lib/"], ".dart",
+                      [re.compile(r"(^|/)lib/main\.dart$"), re.compile(r"(^|/)bin/[^/]+\.dart$")])]
+IMPORT_TARGET_EXTRACTORS[".dart"] = _dart_import_targets
+SYMBOL_EXTRACTORS[".dart"] = _dart_public_symbols
+PLAN_LAYER_ROOTS += ["app/lib"]
+SINGLE_TEST_COMMAND = ["flutter", "test", "{file}"]   # 単一スロット: rust 併用時も dart 側を配線（§5）
+SINGLE_TEST_CWD = "app"
+REQUIRED_PATHS += ["app"]
+REQUIRED_SOFT_PATHS += ["app/CLAUDE.md"]
+```
+
+`post_edit_format.sh` case: `*.dart)` → `dart format --quiet`（失敗時 exit 2、原本と同じ）。
+pre-push/CI: `flutter analyze --fatal-infos`・`flutter test`（`cd app`）。CI は `subosito/flutter-action@v2`。
+
+---
+
+## 列: rust@4 — Rust（engine/ 層・ソルバー等）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+
+> @4（v2.7）: 「単一テストファイル実行」の1行を追加——**該当なし＋代替**の判断ごと記録（paste-block の変更なし）。
+> @3（v2.6）: 「非推奨・世代交代パターン」（該当なし判断）「設計根拠の対象レイヤー」の2行と paste-block 1行を追加。
+> @2（v2.5）: 「編集直後 lint」「依存マニフェスト」の2行を追加（lint は該当なし判断——判断もカタログに記録する）。
+
+前提ツール: Rust toolchain（`engine/rust-toolchain.toml` で固定 — §5）。実測元: 移植元プロジェクト。
+
+| 行 | 値 |
+|---|---|
+| 整形（冪等） | `cargo fmt`（crate ルートで） |
+| 編集直後 lint | 該当なし（clippy は単一ファイル非対応でクレート全体のビルドが走り3秒予算に収まらない — push 段 §4 で回収） |
+| 静的解析 | `cargo clippy --all-targets -- -D warnings` |
+| lint昇格 | `Cargo.toml [lints.clippy]`: `print_stdout`・`print_stderr`・`dbg_macro` を deny |
+| テスト | `cargo test` |
+| print系直呼び | `println!` `eprintln!` `dbg!`（出口: `engine/src/logging.rs`） |
+| テスト内 非決定 | `thread_rng`・`SystemTime::now` |
+| テスト内 外部I/O | `reqwest::`・`std::net::TcpStream` |
+| テスト判別 | `^engine/tests/`・`_test\.rs$`・`(^|/)tests/[^/]+\.rs$` |
+| 単一テストファイル実行 | 該当なし（モジュール内 `#[cfg(test)]` の単独実行が構造的に不能。代替: 統合テスト（`engine/tests/`）限定なら `cargo test --test <名前>` が可——ファイル名でなくテスト名を取るためスロットのトークン拡張が要り、必要になった時に版上げで検討。dart 併用構成では dart 側の配線が優先され、rust テストは対象外1行で見える — §5） |
+| 非推奨・世代交代パターン | 該当なし（出典①②で裏取りできた初期値が現時点で無い——コンパイラ・clippy の deprecation 警告が同役を担う言語のため、列で重ねる価値が薄い。見つけたら版上げで還元） |
+| 依存マニフェスト | `Cargo.toml`（dependencies。`[dependencies.x]` サブテーブル形式も検知）— 既定表に同梱済み（確認のみ・追記不要） |
+| 設計根拠の対象レイヤー | `engine/src`（`PLAN_LAYER_ROOTS` — §3.4 検査5） |
+| 確率的コンポーネント | ソルバー有りなら `solve_for_test(input, seed, max_time)` ラッパー必須（§9.1・同一seed2回一致） |
+| 境界検査 | FFI境界（例 `^engine/src/api(/|\.rs$)`）に `catch_unwind` 必須（`missing-catch-unwind`） |
+
+**paste-block（`scripts/repo_scan.py` BINDING へ）**:
+
+```python
+CODE_EXTS |= {".rs"}
+HEADER_REQUIRED_EXTS |= {".rs"}
+TEST_PATH_PATTERNS += [re.compile(p) for p in (r"^engine/tests/", r"_test\.rs$", r"(^|/)tests/[^/]+\.rs$")]
+GENERATED_PATTERNS += [re.compile(r"(^|/)target/")]
+SLEEP_PATTERNS[".rs"] = [(re.compile(r"\bthread::sleep\b|\bsleep\s*\("), "thread::sleep / sleep()")]
+NONDETERMINISM_PATTERNS[".rs"] = [
+    (re.compile(r"\bthread_rng\b"), "thread_rng（seed 固定の乱数生成器を使う）"),
+    (re.compile(r"\bSystemTime::now\b"), "SystemTime::now（時刻は引数で注入する）")]
+TEST_NETWORK_PATTERNS[".rs"] = [(re.compile(r"\breqwest::|\bTcpStream\b"), "reqwest/TcpStream")]
+PRINT_CALL_PATTERNS[".rs"] = [(re.compile(r"\bprintln!\s*\("), "println!"),
+                              (re.compile(r"\beprintln!\s*\("), "eprintln!"),
+                              (re.compile(r"\bdbg!\s*\("), "dbg!")]
+LOG_EXIT_FILES |= {"engine/src/logging.rs"}
+FFI_BOUNDARY_FILE_PATTERNS = [re.compile(r"^engine/src/api(/|\.rs$)")]
+SOLVER_DIRECT_CALL_PATTERNS = [(re.compile(r"\bsolve\s*\("), "ソルバー本体の直呼び")]  # ソルバー有りの場合
+ORPHAN_UNIVERSES += [(["engine/src/"], ".rs",
+                      [re.compile(p) for p in (r"(^|/)src/lib\.rs$", r"(^|/)src/main\.rs$",
+                                               r"(^|/)build\.rs$", r"(^|/)src/bin/[^/]+\.rs$",
+                                               r"(^|/)tests/[^/]+\.rs$", r"(^|/)benches/[^/]+\.rs$",
+                                               r"(^|/)examples/[^/]+\.rs$")])]
+IMPORT_TARGET_EXTRACTORS[".rs"] = _rust_mod_targets
+SYMBOL_EXTRACTORS[".rs"] = _rust_public_symbols
+PLAN_LAYER_ROOTS += ["engine/src"]
+REQUIRED_PATHS += ["engine"]
+REQUIRED_SOFT_PATHS += ["engine/CLAUDE.md"]
+```
+
+`post_edit_format.sh` case: `*engine/src/*.rs)` → `(cd "$crate_dir" && cargo fmt --quiet)`（原本と同じ）。
+pre-push/CI: `cargo clippy --all-targets -- -D warnings`・`cargo test`・`cargo fmt --check`（`dtolnay/rust-toolchain`＋`Swatinem/rust-cache`）。
+
+---
+
+## この文書自体の運用ルール
+
+- 列の値を採用先で修正したら、**必ずこの正本へ版上げで還元する**（採用先ローカルの黙修正は
+  `binding-drift` 的なドリフトの人間版——禁止）。
+- 「実測済み」への昇格は、採用リポジトリの Step DoD 通過（成功系＋違反注入）の事実をもって行い、
+  列末尾に実測元と日付を1行残す。
+- 複数列の併用（例: dart-flutter + rust）は可。**paste-block は必ず加算形**（`|=` / `+=` /
+  キー代入）で書く——代入（`=`）は後から貼った列が先の列の設定を静かに消す（@2 で ts-react-web /
+  python-uv を加算形に修正済み。新しい列もこの形式で起こす — G13/G5）。
+  刻印はプライマリ列を1つ選んで統一する（例: `dart-flutter@4`）。
