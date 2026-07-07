@@ -172,6 +172,42 @@ def check_ffi_boundary(texts: dict[str, str], out: list[Finding]) -> None:
                             "FFI境界ファイルに catch_unwind が1つも無い（§8.2）"))
 
 
+def check_log_boundary_coverage(texts: dict[str, str], out: list[Finding]) -> None:
+    """missing-log-coverage（§8.4 — v2.19・Phase 31・soft・列充填で有効化）。
+
+    「この関数は重要だからログすべき」という意味判断は機械化できない（GUARDRAILS.md §8.4）。
+    代わりに客観的に検出できる境界（I/O・外部呼び出し・エラーハンドラ——LOG_BOUNDARY_PATTERNS・
+    列充填）に対象を絞り、境界行の前後 LOG_BOUNDARY_WINDOW 行以内に単一出口のログ呼び出し
+    （LOG_CALL_PATTERN）か `NO-LOG: 理由` コメント（NO_LOG_COMMENT_PATTERN）のどちらかが
+    無ければ警告する。理由の妥当性そのものは検証しない——存在検査のみ（RED-FIRST-EXEMPT や
+    `#[allow(reason=...)]` と同じ「見えるようにするだけ」の境界 — G9）。
+    LOG_BOUNDARY_PATTERNS が空なら不発（列充填で有効化）。
+    """
+    for rel, text in texts.items():
+        ext = rs.ext_of(rel)
+        if ext not in rs.LOG_BOUNDARY_PATTERNS or rs.is_generated(rel):
+            continue
+        if rel.startswith(rs.LOG_EXIT_PREFIXES) or rel in rs.LOG_EXIT_FILES:
+            continue
+        lines = text.splitlines()
+        call_pat = rs.LOG_CALL_PATTERN.get(ext)
+        for i, line in _iter_code_lines(ext, text):
+            for pat, label in rs.LOG_BOUNDARY_PATTERNS[ext]:
+                if not pat.search(line):
+                    continue
+                lo = max(0, i - 1 - rs.LOG_BOUNDARY_WINDOW)
+                hi = i - 1 + rs.LOG_BOUNDARY_WINDOW + 1
+                window = lines[lo:hi]
+                covered = any(rs.NO_LOG_COMMENT_PATTERN.search(w) for w in window) or (
+                    call_pat is not None and any(call_pat.search(w) for w in window)
+                )
+                if not covered:
+                    out.append(("SOFT", "missing-log-coverage", f"{rel}:{i}",
+                                f"{label} の境界に前後{rs.LOG_BOUNDARY_WINDOW}行以内のログ被覆が無い"
+                                "（単一出口のログ呼び出しか `NO-LOG: 理由` コメントのどちらかを — "
+                                "GUARDRAILS.md §8.4）"))
+
+
 def check_ui_testid(texts: dict[str, str], out: list[Finding]) -> None:
     """UI操作要素のテストID検査（§12.4）。開始タグ単位・全文正規表現の近似（近似は仕様 — §7.4）。"""
     for file_re, element_re, testid_re, desc in rs.UI_TESTID_RULES:
@@ -428,6 +464,7 @@ def main() -> int:
     check_tests(texts, findings)
     check_deprecated(texts, findings)
     check_log_calls(texts, findings)
+    check_log_boundary_coverage(texts, findings)
     check_ffi_boundary(texts, findings)
     check_ui_testid(texts, findings)
     check_mcp_allowlist(root, files, findings)

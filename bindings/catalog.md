@@ -19,7 +19,7 @@
 
 | 区分 | 行 |
 |---|---|
-| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
+| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
 | ランタイム（表D — §12） | `up`／`reset`（seed込み）／`seed`／`time`（時刻注入）／`db`（DB読み）／`e2e`／操作レール（実UI操作の手段）／観察レール（コンソール・ネットワーク・ログの読み方）／UIテストID検査（`ui-missing-testid`）／外部I/Oシームの置き場所 |
 | paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.sh` case／**`post_edit_lint.sh` case（v2.5）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
 
@@ -45,6 +45,19 @@
 | python-uv | ruff `C901`（mccabe） | `PLR0912`（分岐）・`PLR0913`（引数）・`PLR0915`（文数） |
 | rust | clippy `cognitive_complexity`（nursery——安定化まで任意） | `clippy::too_many_arguments`・`clippy::too_many_lines` |
 | dart-flutter | `dart_code_metrics` の cyclomatic-complexity 等（サードパーティ——採用時は列の版上げで記録） | 同左 maximum-nesting-level 等 |
+
+### ログ境界パターンの出典規律（v2.19 — §8.4 missing-log-coverage の `LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN` を列で埋める時の正本）
+
+対象は「重要な処理」ではなく**客観的に検出できる境界**のみ（判断は §8.4 参照）:
+1. **I/O・外部呼び出し**（HTTPクライアント呼び出し・DBクエリ・ファイル書き込み等の
+   API呼び出しパターン）。
+2. **エラーハンドラ**（`catch` / `except` 節の開始行——`empty_catches` lint（§8.1）が
+   拾わない「非空だがログしていない」catchを補う）。
+3. `LOG_CALL_PATTERN` は列の `logOp` 相当（単一出口）の呼び出しパターン1本のみ。
+
+正規表現で近似できない構文（動的ディスパッチ越しのI/O等）は列に入れない（§7.4「近似は
+仕様」の範囲を超えるものは対象外——偽陽性 > 価値）。初回充填は soft 運用のまま数タスク
+実測し、偽陽性率を確認してから対象パターンを広げる（`feat-without-test` と同じ経路）。
 
 ### MCP・エコシステム採用規律（v2.11 — **2026-07-07 調査**の判定。§3.3 `mcp-not-allowed` の許可リスト `MCP_ALLOWED_SERVERS` を増やす時の正本）
 

@@ -539,6 +539,17 @@ LOG_EXIT_PREFIXES: tuple[str, ...] = ("scripts/",)
 FFI_BOUNDARY_FILE_PATTERNS: list[re.Pattern] = []
 CATCH_UNWIND_PATTERN = re.compile(r"catch_unwind")
 
+# --- ログ被覆検査（§8.4 missing-log-coverage — v2.19・Phase 31・soft。列充填）---
+# 「重要度」は機械が判定できないため対象にしない。代わりに客観的に検出できる境界
+# （I/O・外部呼び出し・エラーハンドラ——列充填）に絞り、境界行の前後 LOG_BOUNDARY_WINDOW
+# 行以内に単一出口のログ呼び出し（LOG_CALL_PATTERN）か `NO-LOG: 理由` コメントの
+# どちらかが無ければ soft 警告する。理由の妥当性は検証しない（存在検査のみ——
+# RED-FIRST-EXEMPT と同じ境界の引き方 — G9「沈黙の禁止」）。
+LOG_BOUNDARY_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
+LOG_CALL_PATTERN: dict[str, re.Pattern] = {}
+NO_LOG_COMMENT_PATTERN = re.compile(r"NO-LOG:\s*\S")
+LOG_BOUNDARY_WINDOW = 5  # 境界行の前後何行を「被覆済み」とみなすか（中立既定値・列上書き可）
+
 # --- UI操作要素のテストID検査（§12.4 ui-missing-testid。列充填）---
 # (対象ファイル正規表現, 操作要素の開始タグ正規表現, テストID属性の正規表現, 説明)
 # 開始タグ正規表現は全文に対して適用される（[^>] は改行も跨ぐ＝複数行タグも近似で拾う）。
