@@ -438,7 +438,20 @@ REQUIRED_PATHS = [
     "tests/guard_corpus.tsv",
 ]
 
-# --- 常時読込文書の行数 soft 上限（§3.3 context-doc-too-large — v2.17・Phase 27）---
+# --- キット原本自身の判定（§3.3 kit-source-exempt — v2.14・Phase 27）---
+# install_kit.py の META_FILES に同居（配布物からは常に除外——バイトコピーされる
+# scripts/repo_scan.py 自体にフラグを持たせると導入先にも複製され判定が骨抜きになるため、
+# 「配布されないファイルの有無」という構造的シグナルだけを見る — G9）。
+KIT_SOURCE_MARKER = ".guardrails-kit-source"
+
+
+def is_kit_source_repo(tracked: set[str]) -> bool:
+    """このチェックアウトがキット原本自身か（導入先での Step 1 未着手と区別するための
+    明示マーカー——構造だけでは両者が同型になるため推測に頼らない — §3.3）。"""
+    return KIT_SOURCE_MARKER in tracked
+
+
+# --- 常時読込文書の行数 soft 上限（§3.3 context-doc-too-large — v2.17・Phase 28）---
 # エージェントが常時/自動で読む規約文書の肥大＝注意力の希釈（G3）を警告する。
 # 出典: 調査③（2026-07-07。CLAUDE.md は最大200行程度の業界指針）。中立既定値・列上書き可。
 # この警告は Skills 化保留（§10——「常駐が問題化した実測」）のセンサーを兼ねる。

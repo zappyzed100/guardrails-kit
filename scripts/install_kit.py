@@ -38,6 +38,7 @@ META_FILES = {
     "README_SETUP.md",
     "PROMPT_claude_code.md",
     "PROMPT_claude_code_existing.md",
+    ".guardrails-kit-source",  # キット原本判定マーカー（§3.3 kit-source-exempt）。導入先には複製しない
 }
 
 

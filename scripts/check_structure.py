@@ -36,10 +36,19 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+KIT_SELF_EXEMPT_REQUIRED = {"AGENTS.md", "CLAUDE.md"}
+
+
 def check_required(files: list[str], tracked: set[str], out: list[Finding]) -> None:
+    kit_source = rs.is_kit_source_repo(tracked)
     for req in rs.REQUIRED_PATHS:
         prefix = req.rstrip("/") + "/"
         if req not in tracked and not any(f.startswith(prefix) for f in files):
+            if kit_source and req in KIT_SELF_EXEMPT_REQUIRED:
+                out.append(("SOFT", "missing-required", req,
+                            "キット原本自身は対象外（実体化は導入先プロジェクトの Step 1 — "
+                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
+                continue
             out.append(("HARD", "missing-required", req, "必須のファイル/ディレクトリが存在しない"))
 
 
@@ -71,9 +80,15 @@ def check_required_content(
             extra[rel] = rs.read_text(root, rel)
         return extra[rel]
 
+    kit_source = rs.is_kit_source_repo(set(files))
     for rule_id, path_re, content_re, desc in rs.REQUIRED_CONTENT_RULES:
         candidates = [rel for rel in files if path_re.search(rel) and not rs.is_generated(rel)]
         if not candidates:
+            if kit_source and rule_id == "agents-import-missing":
+                out.append(("SOFT", rule_id, path_re.pattern,
+                            f"{desc}（キット原本自身は対象外——対象ファイル自体が無い。"
+                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
+                continue
             out.append(("HARD", rule_id, path_re.pattern, f"{desc}（対象ファイル自体が無い）"))
             continue
         if not any(content_re.search(_text(rel)) for rel in candidates):
@@ -201,7 +216,7 @@ def check_mcp_allowlist(root: Path, files: list[str], out: list[Finding]) -> Non
 
 
 def check_context_doc_size(root: Path, files: list[str], out: list[Finding]) -> None:
-    """context-doc-too-large（§3.3 — v2.17・Phase 27・soft）: 常時読込文書の肥大警告。
+    """context-doc-too-large（§3.3 — v2.17・Phase 28・soft）: 常時読込文書の肥大警告。
 
     規約文書はセッションごとに自動で読まれる＝行数がそのまま常駐コンテキスト（G3）。
     上限は CONTEXT_DOC_LIMITS（中立既定値・列上書き可）。soft の理由: 正当に育つ文書で
