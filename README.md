@@ -69,6 +69,9 @@ EPAM の constitution 事例——`surveys/SURVEY_FAMOUS_KITS.md`）。
 
 - `surveys/SURVEY_MCP_ECOSYSTEM.md` — 「話題の MCP をなぜ入れないか」。採用ゲート3条
   （重複排除・常駐トークン予算・契約整合）で Serena / GitHub MCP 等を判定した記録。
+- `surveys/SURVEY_ZERO_REVIEW.md` — 「ゼロレビュー本番運用」系（自己治癒ランタイム・
+  Dark Factory・Telos 注釈）をなぜ入れないか。「ゼロレビューが買えるのは機械検査可能な
+  違反ゼロまで」という立場の固定。
 - `surveys/SURVEY_FAMOUS_KITS.md` — Superpowers / Spec Kit / Kiro / BMAD との比較。
   「著名キットの規律はプロンプト層にあり、明文規則でも AI は破る」の外部裏書きと、
   そこから機械化可能な2知見だけを抽出した過程。

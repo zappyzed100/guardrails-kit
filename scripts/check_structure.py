@@ -36,19 +36,10 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
-KIT_SELF_EXEMPT_REQUIRED = {"AGENTS.md", "CLAUDE.md"}
-
-
 def check_required(files: list[str], tracked: set[str], out: list[Finding]) -> None:
-    kit_source = rs.is_kit_source_repo(tracked)
     for req in rs.REQUIRED_PATHS:
         prefix = req.rstrip("/") + "/"
         if req not in tracked and not any(f.startswith(prefix) for f in files):
-            if kit_source and req in KIT_SELF_EXEMPT_REQUIRED:
-                out.append(("SOFT", "missing-required", req,
-                            "キット原本自身は対象外（実体化は導入先プロジェクトの Step 1 — "
-                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
-                continue
             out.append(("HARD", "missing-required", req, "必須のファイル/ディレクトリが存在しない"))
 
 
@@ -80,15 +71,9 @@ def check_required_content(
             extra[rel] = rs.read_text(root, rel)
         return extra[rel]
 
-    kit_source = rs.is_kit_source_repo(set(files))
     for rule_id, path_re, content_re, desc in rs.REQUIRED_CONTENT_RULES:
         candidates = [rel for rel in files if path_re.search(rel) and not rs.is_generated(rel)]
         if not candidates:
-            if kit_source and rule_id == "agents-import-missing":
-                out.append(("SOFT", rule_id, path_re.pattern,
-                            f"{desc}（キット原本自身は対象外——対象ファイル自体が無い。"
-                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
-                continue
             out.append(("HARD", rule_id, path_re.pattern, f"{desc}（対象ファイル自体が無い）"))
             continue
         if not any(content_re.search(_text(rel)) for rel in candidates):
@@ -213,6 +198,28 @@ def check_mcp_allowlist(root: Path, files: list[str], out: list[Finding]) -> Non
                             f"{sorted(rs.MCP_ALLOWED_SERVERS)} のみ。追加はカタログの"
                             "「MCP・エコシステム採用規律」ゲート3条を通し、判定を記録して"
                             " repo_scan.MCP_ALLOWED_SERVERS へ — GUARDRAILS.md §3.3・§12.4）"))
+
+
+def check_context_doc_size(root: Path, files: list[str], out: list[Finding]) -> None:
+    """context-doc-too-large（§3.3 — v2.17・Phase 27・soft）: 常時読込文書の肥大警告。
+
+    規約文書はセッションごとに自動で読まれる＝行数がそのまま常駐コンテキスト（G3）。
+    上限は CONTEXT_DOC_LIMITS（中立既定値・列上書き可）。soft の理由: 正当に育つ文書で
+    あり、分割（フォルダ CLAUDE.md / Skills 化——§10 保留のセンサーを兼ねる）の判断は人間。
+    """
+    for rel in files:
+        if rs.is_generated(rel):
+            continue
+        for pat, limit in rs.CONTEXT_DOC_LIMITS:
+            if pat.search(rel):
+                n = rs.read_text(root, rel).count("\n") + 1
+                if n > limit:
+                    out.append(("SOFT", "context-doc-too-large", rel,
+                                f"{n} 行 > 上限 {limit} 行（常時読込の規約文書の肥大＝"
+                                "注意力の希釈 G3。章をフォルダ CLAUDE.md や docs/ へ分割する。"
+                                "この警告は Skills 化保留のトリガー実測でもある — "
+                                "GUARDRAILS.md §3.3・§10 保留）"))
+                break
 
 
 def check_hooks_installed(root: Path, tracked: set[str], out: list[Finding]) -> None:
@@ -393,6 +400,7 @@ def main() -> int:
     check_ffi_boundary(texts, findings)
     check_ui_testid(texts, findings)
     check_mcp_allowlist(root, files, findings)
+    check_context_doc_size(root, files, findings)
     check_hooks_installed(root, tracked, findings)
     check_binding_dead_patterns(findings)
     check_binding_source(root, tracked, findings)
