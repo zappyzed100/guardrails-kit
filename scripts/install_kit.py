@@ -317,11 +317,22 @@ def main() -> int:
         for z in sorted(target.glob("guardrails-kit*.zip")):
             z.unlink()
             removed.append(z.name)
-        if re.match(r"^\.?guardrails-kit", kit_root.name) and kit_root.parent == target:
-            shutil.rmtree(kit_root)
-            removed.append(kit_root.name + "/")
-        elif kit_root.parent == target:
-            print(f"NOTE:source-kept {kit_root.name}/ 既定外の名前のため削除しない"
+        # 後片付け対象は「target 直下で kit_root を含む最初の階層」——GitHub の
+        # Download ZIP / Release zip は `<repo>-<ref>/` で1階層ネストされる
+        # （.guardrails-kit-src/guardrails-kit-master/ 等）ため、kit_root.parent と
+        # target の直接一致だけでは判定できない（不一致で沈黙してしまう＝G9 違反）。
+        try:
+            top_component = kit_root.relative_to(target).parts[0]
+        except ValueError:
+            top_component = None
+        if top_component and re.match(r"^\.?guardrails-kit", top_component):
+            shutil.rmtree(target / top_component)
+            removed.append(top_component + "/")
+        elif top_component:
+            print(f"NOTE:source-kept {top_component}/ 既定外の名前のため削除しない"
+                  "（不要なら手動で削除）")
+        else:
+            print(f"NOTE:source-kept {kit_root} は対象直下の外にあるため削除しない"
                   "（不要なら手動で削除）")
     for name in removed:
         print(f"CLEANUP {name} を削除")

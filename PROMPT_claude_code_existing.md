@@ -73,8 +73,10 @@ Edit|Write|MultiEdit の2 matcher）/ Stop / SessionStart の4キー**と `permi
 - **Step -1a（配置。コミットしない）**: キットが zip / 展開フォルダのままなら、
   **手でコピーせず**配置する（配置済みならスキップ）:
   `python3 -m zipfile -e guardrails-kit-*.zip .guardrails-kit-src` →
-  `python3 .guardrails-kit-src/scripts/install_kit.py`（`python3` が無ければ `py -3` /
-  `uv run --no-project`）。既存リポジトリでは `CONFLICT` が出るのが普通——各行のヒントに
+  `scripts/install_kit.py` を探して実行する（GitHub の Download ZIP / Release zip は
+  `<repo>-<ブランチ/タグ>/` で1階層ネストされるため固定パスで決め打ちしない——
+  `python3 -c "import glob,subprocess,sys; hits=glob.glob('.guardrails-kit-src/**/scripts/install_kit.py',recursive=True); sys.exit('scripts/install_kit.py が見つからない' if not hits else subprocess.run([sys.executable,hits[0]]).returncode)"`。
+  `python3` が無ければ `py -3` / `uv run --no-project`）。既存リポジトリでは `CONFLICT` が出るのが普通——各行のヒントに
   従い**既存側へキット要件を統合**（既存エントリは消さない）して再実行し（冪等）、
   意図して既存を維持する場合のみ `--skip <パス>` で明示する。**exit 0 になるまで
   Step -1b へ進まない**。exit 0 で zip・展開元は自動削除される。

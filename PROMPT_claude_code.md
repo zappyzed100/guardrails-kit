@@ -34,14 +34,24 @@ Claude Code の**最初のメッセージ**として貼り付ける。
 ## 配置（キットがまだ zip / 展開フォルダのままの場合のみ。配置済みならスキップ）
 
 ルートに `GUARDRAILS.md` が無く、`guardrails-kit*.zip` か `guardrails-kit*` フォルダが
-ある状態なら、**手でコピーせず**次で配置する:
+ある状態なら、**手でコピーせず**次で配置する。GitHub の「Download ZIP」や Release の
+ソースzipは中身が `<repo>-<ブランチ/タグ>/`（例: `guardrails-kit-master/`）で
+**1階層ネストされる**ため、`scripts/install_kit.py` を固定パスで決め打ちせず探索する:
 
 ```bash
 python3 -m zipfile -e guardrails-kit-*.zip .guardrails-kit-src   # zip の場合のみ
-python3 .guardrails-kit-src/scripts/install_kit.py               # フォルダなら <フォルダ>/scripts/install_kit.py
+python3 -c "
+import glob, subprocess, sys
+hits = glob.glob('.guardrails-kit-src/**/scripts/install_kit.py', recursive=True)
+if not hits:
+    sys.exit('scripts/install_kit.py が見つからない（配置を確認）')
+sys.exit(subprocess.run([sys.executable, hits[0]]).returncode)
+"
 ```
 
-（`python3` が無ければ `py -3` / `uv run --no-project` で同じ引数のまま）
+（`python3` が無ければ `py -3` / `uv run --no-project` で同じ引数のまま。手で展開済みの
+フォルダをルートに置いた場合は1行目を飛ばして2行目だけ実行すればよい——`**` の探索が
+ネスト有無どちらも吸収する）
 新規リポジトリでは全行 `INSTALLED` になるのが正常。`CONFLICT` が出たら各行のヒントに
 従って解消し**再実行**する（冪等）。exit 0 で zip・展開元は自動削除される。
 `.claude/settings.json` を配置した直後は、ユーザーに

@@ -51,6 +51,18 @@
   出力を確認し、`LOG_BOUNDARY_PATTERNS`/`LOG_CALL_PATTERN` も4ケースの違反注入DoDを通した。
   独自スキーマの発明ではなく、既存標準への収斂であることを明記。サンプルは貼り替え自由な
   出発点であり、キットの検査はその中身までは見ない（§8.2）。
+- **是正: GitHub の Download ZIP / Release zip 配置手順が壊れていた**（G9）: `guardrails-kit-master.zip`
+  のように GitHub のzipは中身が `<repo>-<ref>/` で1階層ネストされるため、
+  `PROMPT_claude_code.md`・`PROMPT_claude_code_existing.md`・`README.md` が示す
+  「`python3 .guardrails-kit-src/scripts/install_kit.py` を直接叩く」手順が
+  `No such file or directory` で失敗することを実際に再現して確認した。加えて
+  `install_kit.py` 自身の後片付けロジックも `kit_root.parent == target` の一致判定に
+  依存しており、ネスト配置では該当せず `.guardrails-kit-src/` が無言で残る（G9違反）ことも
+  発見。①3ファイルの手順を `glob` による探索へ変更 ②`install_kit.py` の後片付けを
+  「target 直下の最初の階層コンポーネント」で判定する方式に変更——の2点を修正し、
+  ネスト配置・フラット配置・想定外の名前の3ケースをそれぞれ実行して確認した
+  （ネスト→完全に片付く／フラット→従来どおり片付く／想定外の名前→`NOTE:source-kept`
+  で明示的に残る、の3通りとも実測どおり）。
 
 ## v2.19 での変更点（v2.18 からの整備。文書のみ・根拠は `GOALS.md` のG）
 
