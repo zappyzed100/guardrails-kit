@@ -785,6 +785,15 @@ push 時に回す。フック自体の導入は §0 の `pre-commit install` に
   こと（パニックを握りつぶさずログして返す——ルート `AGENTS.md` §7）。欠落は
   §3.3 の `HARD:missing-catch-unwind` が止める（存在検査のみの trip-wire。
   「正しく使えているか」まではレビューの責務）。
+- **出力の中身（v2.20 — サンプル実装）**: `[タグ] 操作名: 詳細 (+Xms)` は人間が読む前提の
+  概念的な形（このキットが規定するのはここまで——ログレベルの種類・タイムスタンプ・
+  構造化するか・出力先はプロジェクトの判断 — §8.4）。python-uv 列（`bindings/catalog.md`）
+  には、この形を実際に満たす**動作確認済みの参考実装**を追加した——独自スキーマを発明
+  せず OpenTelemetry Logs Data Model の命名・構造化ログの実務コンセンサス（ISO 8601 UTC
+  timestamp・level・trace_id）・12-factor app「ログはイベントストリーム」に揃えた1行1JSON。
+  サンプルは**貼り替え自由な出発点**であり、`check_structure.py` は中身を検査しない
+  （`log-direct-call` が見るのは「経由したか」だけ）。他列（ts-react-web/rust/dart-flutter）
+  への展開は未実施——今後の列充填で追加する。
 
 ### 8.3 秘密の多層防御と責務の境界
 - コミット面 = gitleaks（§3.1）が機械検査。

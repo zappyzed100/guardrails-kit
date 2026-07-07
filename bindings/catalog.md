@@ -269,8 +269,17 @@ COMMANDS = {
 
 ---
 
-## 列: python-uv@5 — Python（uv・CLI/バックエンド）【要実測】
+## 列: python-uv@6 — Python（uv・CLI/バックエンド）【要実測】
 
+> @6（v2.20）: ログ単一出口 `log_op` の実サンプル（下記 paste-block）と `LOG_BOUNDARY_PATTERNS`
+> 行を追加。フィールド設計は OpenTelemetry Logs Data Model の命名（timestamp/severity/body/
+> attributes 相当）に揃え、独自スキーマの発明を避けた（出典は下記）。**`log_op` 実行して
+> 有効なJSON1行×3ケースを確認**、**`LOG_BOUNDARY_PATTERNS`/`LOG_CALL_PATTERN` も
+> `check_log_boundary_coverage` に直接通して4ケースDoD実測**（① except無ログ→SOFT 1行
+> ② HTTP呼び出し無ログ→SOFT 1行 ③ `log_op` 被覆→沈黙 ④ `NO-LOG:` 理由→沈黙）。
+> この2行は実測済みとしてよいが、列の他の行（テスト・E2E・依存マニフェスト等）は
+> 過去版のまま個別ステータスを維持——列全体の一括昇格はしない（G13の「値ごとに実測状態を
+> 持つ」原則）ため見出しは引き続き【要実測】。
 > @5（v2.7）: 「単一テストファイル実行」の1行と paste-block 1行を追加。red-first の機構自体は本キットの DoD で python 系フィクスチャにより実測済み（親でも緑の fix→`red-first-green` 1行／親で赤→証明1行／EXEMPT→免除1行）。
 > @4（v2.6）: 「非推奨・世代交代パターン」「設計根拠の対象レイヤー」の2行と paste-block の追記。deprecated-api の paste-block は本キットの DoD で実測済み（`utcnow(` 注入→`HARD:deprecated-api` 1行・除去→沈黙・未走査拡張子注入→`binding-dead-pattern`・70ms）。
 > @3（v2.5）: 「編集直後 lint」「依存マニフェスト」の2行と `post_edit_lint.sh` paste-block を追加。lint paste-block は本キットの DoD で実測済み（違反→exit 2＋stderr／クリーン→0／uvx 不在・実行不能→表示素通し／62ms）。
@@ -286,6 +295,8 @@ COMMANDS = {
 | テスト | `uv run pytest -q` |
 | E2E | CLI なら subprocess 経由の統合テスト（操作レール=そのまま実行） |
 | print系直呼び | `print(`（出口: `src/<pkg>/log.py`） |
+| ログ境界パターン | 外部HTTP呼び出し（`requests\.` `httpx\.`）・`except` 節開始行（`LOG_BOUNDARY_PATTERNS` — §8.4） |
+| ログ呼び出しパターン | `log_op\(`（`LOG_CALL_PATTERN` — サンプル実装は下記） |
 | テスト内 非決定 | `time.time(` `datetime.now(` `random.random(` `random.randint(`（seed/Clock注入） |
 | テスト内 外部I/O | `requests.` `httpx.` `urllib.request` |
 | 非推奨・世代交代パターン | `utcnow(`・`utcfromtimestamp(`（Python 3.12 で公式非推奨＝出典②。代替: `datetime.now(timezone.utc)` / `datetime.fromtimestamp(ts, timezone.utc)`） |
@@ -309,6 +320,11 @@ NONDETERMINISM_PATTERNS[".py"] = [
 TEST_NETWORK_PATTERNS[".py"] = [
     (re.compile(r"\brequests\.|\bhttpx\.|\burllib\.request"), "requests/httpx/urllib")]
 PRINT_CALL_PATTERNS[".py"] = [(re.compile(r"(?<![\w.])print\s*\("), "print(")]
+LOG_BOUNDARY_PATTERNS[".py"] = [
+    (re.compile(r"\brequests\.(get|post|put|delete|patch)\s*\(|\bhttpx\.(get|post|put|delete|patch)\s*\("),
+     "外部HTTP呼び出し"),
+    (re.compile(r"^\s*except\b"), "エラーハンドラ")]
+LOG_CALL_PATTERN[".py"] = re.compile(r"\blog_op\s*\(")
 DEPRECATED_PATTERNS[".py"] = [
     (re.compile(r"\butcnow\s*\("), "datetime.utcnow()（3.12 で非推奨。datetime.now(timezone.utc) へ）"),
     (re.compile(r"\butcfromtimestamp\s*\("), "datetime.utcfromtimestamp()（3.12 で非推奨。fromtimestamp(ts, timezone.utc) へ）")]
@@ -322,6 +338,66 @@ LOG_EXIT_FILES |= {"src/log.py"}   # 実パスへ調整（scripts/ 配下は LOG
 `dev.py` COMMANDS: `test=[["uv","run","pytest","-q"]]`・`fmt=[["uvx","ruff","format","."]]`、
 残りは構成依存で充填。pre-push/CI は ruff check・pytest を ts 列と同じ形で並べる。
 `post_edit_format.sh` case: `*.py)` → `uvx ruff format "$file_path"`（キットの `scripts/*.py` にも当たる）。
+
+**サンプル実装（`src/log.py` へ配置——§8.2・§8.4 の単一出口。実行して有効なJSON出力を
+確認済み・2026-07-08）**:
+
+出典（独自スキーマを発明せず、以下の収斂点に揃えた）: OpenTelemetry Logs Data Model
+（`timestamp`/`severity`/`body`/`attributes` 相当の命名）・構造化ログの実務コンセンサス
+（ISO 8601 UTC の `timestamp`・`level`・相関ID用の `trace_id`）・12-factor app「ログは
+イベントストリームとして扱う」（ファイル管理をアプリでせず、unbuffered stdout へ書いて
+集約は環境側に委ねる）。呼び出し規約（`tag`/`op`/`detail`/`error`/`elapsed`）は
+GUARDRAILS.md §8.2 の既存シグネチャをそのまま踏襲——**呼び出し側のインターフェースは
+変えず、出力の中身だけを構造化した**。
+
+```python
+"""log.py -- 単一出口のログ実装（GUARDRAILS.md §8.2・§8.4）。1行1JSON・stdout unbuffered。"""
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime, timezone
+
+
+def log_op(
+    tag: str,
+    op: str,
+    detail: str,
+    *,
+    error: BaseException | str | None = None,
+    elapsed_ms: int | float | None = None,
+    level: str | None = None,
+    trace_id: str | None = None,
+) -> None:
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "level": level or ("ERROR" if error is not None else "INFO"),
+        "tag": tag,
+        "op": op,
+        "message": detail,
+    }
+    if elapsed_ms is not None:
+        record["elapsed_ms"] = elapsed_ms
+    if error is not None:
+        record["error"] = str(error)
+    if trace_id is not None:
+        record["trace_id"] = trace_id
+    print(json.dumps(record, ensure_ascii=False), flush=True, file=sys.stdout)
+```
+
+実行結果（`log_op("api","fetch_user","user retrieved",elapsed_ms=42)` 等3ケース）:
+
+```
+{"timestamp": "2026-07-07T22:44:37.524Z", "level": "INFO", "tag": "api", "op": "fetch_user", "message": "user retrieved", "elapsed_ms": 42}
+{"timestamp": "2026-07-07T22:44:37.525Z", "level": "ERROR", "tag": "api", "op": "fetch_user", "message": "not found", "elapsed_ms": 8, "error": "404"}
+{"timestamp": "2026-07-07T22:44:37.525Z", "level": "WARN", "tag": "db", "op": "query", "message": "slow query", "elapsed_ms": 1200}
+```
+
+**このサンプルが規定しないもの**（§8.4 の境界どおり——プロジェクトが決める）: `service`
+（実行主体名）・`trace_id` の実際の伝播経路（contextvars 等でのミドルウェア配線）・
+出力先の変更（stdoutのまま集約サービスに渡すのが12-factor流だが、ファイル直書きに
+変えるのも自由）・ログレベルのフィルタリング閾値。**変更したら列の版を上げて記録する**
+（G5）。
 
 **paste-block（`post_edit_lint.sh` の case へ — v2.5・実測済み）**:
 
