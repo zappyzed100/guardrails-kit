@@ -34,6 +34,18 @@
 移行）**は列に入れない**——偽陽性 > 価値（§7.4「近似は仕様」の範囲を超えるものは対象外）。
 各パターンのラベルには**代替 API を必ず書く**（違反者がラベルだけで直せる形 — G4）。
 
+### 関数複雑度ゲートの対応表（v2.18 — 調査④。Step 6 の lint 昇格時に有効化を推奨）
+
+自作の AST / 正規表現複雑度検査は**不採用**（linter のネイティブ規則が上位互換——採用
+ゲート1条）。各列の linter で以下を有効化する（閾値は列の実測で調整・ここは対応表の正本）:
+
+| 列 | サイクロマティック複雑度 | ネスト/引数/長さ |
+|---|---|---|
+| ts-react-web | eslint `complexity` | `max-depth`・`max-params`・`max-lines-per-function` |
+| python-uv | ruff `C901`（mccabe） | `PLR0912`（分岐）・`PLR0913`（引数）・`PLR0915`（文数） |
+| rust | clippy `cognitive_complexity`（nursery——安定化まで任意） | `clippy::too_many_arguments`・`clippy::too_many_lines` |
+| dart-flutter | `dart_code_metrics` の cyclomatic-complexity 等（サードパーティ——採用時は列の版上げで記録） | 同左 maximum-nesting-level 等 |
+
 ### MCP・エコシステム採用規律（v2.11 — **2026-07-07 調査**の判定。§3.3 `mcp-not-allowed` の許可リスト `MCP_ALLOWED_SERVERS` を増やす時の正本）
 
 採用は次の**ゲート3条をすべて**通し、判定（不採用も）を本注記か §10 に記録してから:

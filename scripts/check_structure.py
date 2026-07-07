@@ -215,6 +215,22 @@ def check_mcp_allowlist(root: Path, files: list[str], out: list[Finding]) -> Non
                             " repo_scan.MCP_ALLOWED_SERVERS へ — GUARDRAILS.md §3.3・§12.4）"))
 
 
+def check_env_files(files: list[str], out: list[Finding]) -> None:
+    """env-file-tracked（§3.3 — v2.18・Phase 29・hard）: .env 系の追跡を拒否する。
+
+    gitleaks（§3.1）は内容のパターン検査であり、低エントロピーの実値が入った .env は
+    素通りし得る——存在自体を塞ぐ（調査④の must ティア項目）。雛形（ENV_FILE_ALLOWED）
+    は除外。解消は `git rm --cached <file>` ＋ .gitignore 追記＋値のローテーション。
+    """
+    for rel in files:
+        base = rel.rsplit("/", 1)[-1]
+        if rs.ENV_FILE_PATTERN.search(rel) and base not in rs.ENV_FILE_ALLOWED:
+            out.append(("HARD", "env-file-tracked", rel,
+                        "実値の入り得る .env 系ファイルが追跡されている（gitleaks の内容検査を"
+                        "素通りし得る経路 — 調査④）。`git rm --cached` で追跡を外し .gitignore へ、"
+                        "値は漏えい扱いでローテーションする（GUARDRAILS.md §3.3）"))
+
+
 def check_context_doc_size(root: Path, files: list[str], out: list[Finding]) -> None:
     """context-doc-too-large（§3.3 — v2.17・Phase 28・soft）: 常時読込文書の肥大警告。
 
@@ -415,6 +431,7 @@ def main() -> int:
     check_ffi_boundary(texts, findings)
     check_ui_testid(texts, findings)
     check_mcp_allowlist(root, files, findings)
+    check_env_files(files, findings)
     check_context_doc_size(root, files, findings)
     check_hooks_installed(root, tracked, findings)
     check_binding_dead_patterns(findings)

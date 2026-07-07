@@ -50,6 +50,10 @@ PASS_THROUGH_PREFIXES = ("Merge", "Revert", "fixup!", "squash!")
 #   純変更行数（追加+削除。生成物・lockfile 除外——数え方の正本は
 #   rs.COMMIT_SIZE_SOFT_LIMIT / rs.LOCKFILE_NAMES）が上限超過なら警告1行。
 #   大きな塊は検証の追跡可能性を壊す（実行規律2の一般開発版）。
+# 検査8（test-shrink — v2.18・Phase 30・**soft**・列充填で有効化）:
+#   fix:/feat: でテストファイルの純減（削除行>追加行）なら警告1行。既存テストの弱体化は
+#   門を欺く最短路（調査④ Clean Room QA の脅威モデル——red-first が守るのは「新テストが
+#   親で赤」まで）。正当な整理も普通に存在するため soft。TEST_PATH_PATTERNS 空なら不発。
 # 検査3（governance-without-goal — §3.4・GOALS.md 運用ルールの機械化）:
 # 正本3文書をステージしたコミットは、メッセージ本文に「どのGに効くか」の引用が必須。
 GOVERNANCE_PATHS = frozenset({"GOALS.md", "GUARDRAILS.md", "bindings/catalog.md"})
@@ -279,6 +283,29 @@ def check_feat_test(subject: str, staged: list[str]) -> None:
               "§10 Phase 25。AGENTS.md §8）", file=sys.stderr)
 
 
+def check_test_shrink(subject: str) -> None:
+    """検査8（test-shrink — soft・v2.18）。警告のみで exit へ影響しない。"""
+    if not (subject.startswith("fix:") or subject.startswith("feat:")) or not rs.TEST_PATH_PATTERNS:
+        return
+    proc = subprocess.run(["git", "diff", "--cached", "--numstat"],
+                          capture_output=True, check=False)
+    if proc.returncode != 0:
+        return
+    added = removed = 0
+    for line in proc.stdout.decode("utf-8", "replace").splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3 or parts[0] == "-":
+            continue
+        if rs.is_test_file(parts[2]):
+            added += int(parts[0])
+            removed += int(parts[1])
+    if removed > added:
+        print(f"SOFT:test-shrink (ステージ済み変更) テストファイルが純減している"
+              f"（追加 {added} 行 < 削除 {removed} 行）。既存テストの弱体化は門を欺く最短路"
+              "（assertion の削除で緑にしていないか——正当な整理なら無視してよい・soft — "
+              "GUARDRAILS.md §3.4 検査8・調査④）", file=sys.stderr)
+
+
 def check_commit_size(staged: list[str]) -> None:
     """検査7（commit-too-large — soft・v2.13）。警告のみで exit へ影響しない。"""
     proc = subprocess.run(["git", "diff", "--cached", "--numstat"],
@@ -347,9 +374,10 @@ def main(argv: list[str]) -> int:
     # 検査5: feat⇔plan 対（hard — §3.4・G14。検査4と同一実行で両方を列挙してから落とす）
     plan_violations = check_feat_plan(subject, staged)
 
-    # 検査6・8（soft — v2.13。警告のみ・exit へ影響しない）
+    # 検査6〜8（soft — v2.13/v2.18。警告のみ・exit へ影響しない）
     check_feat_test(subject, staged)
     check_commit_size(staged)
+    check_test_shrink(subject)
 
     return 1 if (dep_violations or plan_violations) else 0
 

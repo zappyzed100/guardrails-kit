@@ -460,6 +460,12 @@ CONTEXT_DOC_LIMITS: list[tuple[re.Pattern, int]] = [
     (re.compile(r"^AGENTS\.md$"), 500),       # 全章の正本（列充填で育つ分の余白込み）
 ]
 
+# --- .env 系の追跡禁止（§3.3 env-file-tracked — v2.18・Phase 29）---
+# 追跡してよい .env 系は「値の入らない雛形」だけ（basename 完全一致。列が += で追記可）。
+# gitleaks は内容パターン検査＝低エントロピーの実値は素通りし得るため、存在自体を hard で塞ぐ。
+ENV_FILE_ALLOWED: set[str] = {".env.example", ".env.sample", ".env.template"}
+ENV_FILE_PATTERN = re.compile(r"(^|/)\.env(\.[A-Za-z0-9_.-]+)?$")
+
 # --- コミット規模の soft 上限（§3.4 検査7 commit-too-large — v2.13・Phase 26）---
 # 1コミットの純変更行数（追加+削除。生成物・lockfile 除外）がこれを超えたら soft 警告。
 # 出典: 著名ワークフローの収斂（Superpowers「2〜5分粒度のタスク」・小さな反復の一般則）
