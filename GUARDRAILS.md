@@ -345,9 +345,10 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   機械が判定できないため対象を客観的境界に絞り、理由の妥当性は検証しない存在検査のみ
   （RED-FIRST-EXEMPT と同じ「見えるようにするだけ」の境界 — G9）。
 - （移植元の例）`missing-cxx-bridge` — cxxブリッジ（`cxx::bridge`）の欠落（この種の存在検査は REQUIRED_CONTENT_RULES として表B/列が定義する — §12.6）
-- （列充填で有効化）`test-sleep` — テスト内の sleep 系（flakyの温床。移植元の例: `sleep` / `Future.delayed`）
+- （列充填で有効化）`test-sleep` — テスト内の sleep 系（flakyの温床。移植元の例: `sleep` / `Future.delayed`。
+  免除は `NONDETERMINISM-EXEMPT: 理由` コメント — §9.5・v2.25）
 - （列充填で有効化）`test-nondeterminism` — テスト内の非決定入力（移植元の例: `DateTime.now()`・引数なし
-  `Random()`・`thread_rng`・`SystemTime::now`。契約と代替手段は §9.2）
+  `Random()`・`thread_rng`・`SystemTime::now`。契約と代替手段は §9.2。免除は §9.5 と同じ）
 - （表Bで確率的コンポーネント有の場合に有効化）`test-calls-solver-direct` — テストコードからのソルバー直呼び。
   テストは `solve_for_test` 相当のラッパー経由のみ（契約は §9.1）
 - （列充填で有効化）`log-direct-call` — 採用列の単一出口以外での print 系直呼び
