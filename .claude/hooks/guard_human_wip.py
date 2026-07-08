@@ -44,6 +44,19 @@ def warn_and_pass(reason: str) -> int:
     return 0
 
 
+def local_rel_candidate(root: str, file_path: str) -> str | None:
+    """git を呼ばずに求める、baseline 照合用の暫定相対パス（POSIX区切り）。
+
+    解決できない・root の外 等は None を返し、呼び出し側は git ベースの本来経路へ
+    フォールバックする（見逃しの方向にしか倒れない——§2c は fail-open）。
+    """
+    try:
+        rel = Path(file_path).resolve().relative_to(Path(root).resolve())
+    except (OSError, ValueError):
+        return None
+    return rel.as_posix()
+
+
 def resolve_root() -> str | None:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     if root:
