@@ -1,8 +1,13 @@
 # stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: .guardrails/GUARDRAILS.md §2b）
 #
 # Stop フックの仕様: 応答終了時に発火し、exit 2 で終了を差し戻せる（stderr が Claude に渡る）。
-# 入力 JSON: session_id / transcript_path / stop_hook_active。stop_hook_active=true は
-# 「既に差し戻しで継続中」を意味する（無限ループ防止に必読 — §2b）。
+# 入力 JSON: session_id / transcript_path（HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md
+# 2026-07-08 — §2d。exit 2 の効果・session_id・transcript_path はここで確認済み）。
+# stop_hook_active はこの確認時点の公式ドキュメントに**記載が無い**（未文書化フィールドの
+# 可能性——実機のペイロードには存在し、本フックの無限ループ防止（無読）はそれに依存して
+# 動いている。ドキュメントと実機が食い違う具体例——次にこのフックへ手を入れる時に
+# 実機で再確認すること。stop_hook_active=true は「既に差し戻しで継続中」を意味する
+# という理解は Phase 11（v2.4）導入時の実機確認に基づく、ドキュメント未確認の前提のまま）。
 #
 # 差し戻し条件（いずれかの理由が成立 ∧ 免除なし の時のみ exit 2）:
 #   条件A（v2.4）: `git status --porcelain` が非空（未コミットの作業がある）

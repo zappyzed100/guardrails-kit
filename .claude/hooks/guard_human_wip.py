@@ -1,6 +1,7 @@
 # guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: .guardrails/GUARDRAILS.md §2c）
 #
-# PreToolUse(Edit|Write|MultiEdit)。ブロック条件は**両方**が成立する時のみ:
+# PreToolUse(Edit|Write|MultiEdit)（HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md
+# 2026-07-08 — §2d）。ブロック条件は**両方**が成立する時のみ:
 #   (A) 対象 file_path が session_baseline.py の保存した baseline に含まれる
 #       （＝セッション開始時点で既に未コミット変更があった＝人間のWIP）
 #   (B) そのファイルが**現在も**未コミット（`git status --porcelain -- <path>` が非空）

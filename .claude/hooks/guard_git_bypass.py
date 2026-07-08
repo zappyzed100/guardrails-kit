@@ -2,7 +2,8 @@
 #
 # 呼び出し（PreToolUse: Bash。settings.json 側で `uv run python` 経由——§7.1）。
 # PreToolUse(Bash) の仕様: ブロックできるのは exit 2 **だけ**（exit 1 含む他の非0は素通し）。
-# したがって本フック内の想定外エラーもすべて exit 2 に倒す（fail-closed）——これが契約。
+# したがって本フック内の想定外エラーもすべて exit 2 に倒す（fail-closed）——これが契約
+# （HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）。
 # 引用符の中身（コミットメッセージ等）は判定前に取り除くため、メッセージ文面に
 # --no-verify という文字列が入っていても誤検知しない。
 #

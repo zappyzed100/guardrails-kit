@@ -5,7 +5,8 @@
 # ループ1周が消える。違反は exit 2 —— stderr が Claude に渡り、コンテキストを保持した
 # まま即修正ループに入れる。
 #
-# 実行順の保証: Claude Code の公式仕様では同一 matcher の複数フックは**並列・順序不定**。
+# 実行順の保証: Claude Code の公式仕様では同一 matcher の複数フックは**並列・順序不定**
+# （HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）。
 # そのため本フックは settings.json 側で post_edit_format.py と**1コマンドの直列**として
 # 配線される（整形→lint の順を実行環境の仕様に依存させない —— §1）。
 #

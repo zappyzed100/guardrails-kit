@@ -16,7 +16,8 @@
 # v2.23（G11・言語移行）: 実装言語統一のため移植する。
 #
 # v2.29（G7・実測で訂正）: 上記 v2.23 の前提「SessionStart は1セッション1回のみの発火」は
-# 誤りだった。公式仕様（source: "startup"|"resume"|"clear"|"compact"）通り、compact
+# 誤りだった。公式仕様（source: "startup"|"resume"|"clear"|"compact"——HARNESS-VERIFIED:
+# code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）通り、compact
 # （要約）でも SessionStart は再発火する。source を見ずに毎回 git status を無条件で
 # baseline へ書いていたため、compact 直前に AI 自身が書きかけ・未コミットだったファイルが
 # 丸ごと「人間の WIP」として焼き付き、以後そのファイルへの Edit/Write が誤ブロックされ
