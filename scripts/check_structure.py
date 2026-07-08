@@ -1,12 +1,12 @@
-# check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: GUARDRAILS.md §7.5・§3.3）
+# check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: .guardrails/GUARDRAILS.md §7.5・§3.3）
 #
 # 呼び出し（§7.1: 必ず uv 経由）: uv run scripts/check_structure.py
 #   exit 0 = 違反なし or soft のみ / exit 1 = hard 違反あり / exit 2 = 内部エラー
 #
-# 出力形式（§3.3: LLM が機械的に GUARDRAILS.md と突き合わせて直せる形式）:
+# 出力形式（§3.3: LLM が機械的に .guardrails/GUARDRAILS.md と突き合わせて直せる形式）:
 #   1違反1行・先頭に規則ID —  例: `HARD:layer-violation app/lib/x.dart:12 説明…`
 #
-# 検査項目の一覧（何を検査するか）は GUARDRAILS.md §3.3 が契約。検出パターンの実体は
+# 検査項目の一覧（何を検査するか）は .guardrails/GUARDRAILS.md §3.3 が契約。検出パターンの実体は
 # scripts/repo_scan.py の BINDING セクションが正本（同じ正規表現の二重実装禁止 — §7.3）。
 # 性能予算: フルスキャン2秒以内（§7.7）。全ファイル1回読み・O(N²) 禁止（§7.3）。
 
@@ -47,7 +47,7 @@ def check_required(files: list[str], tracked: set[str], out: list[Finding]) -> N
             if kit_source and req in KIT_SELF_EXEMPT_REQUIRED:
                 out.append(("SOFT", "missing-required", req,
                             "キット原本自身は対象外（実体化は導入先プロジェクトの Step 1 — "
-                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
+                            f"{rs.KIT_SOURCE_MARKER} — .guardrails/GUARDRAILS.md §3.3）"))
                 continue
             out.append(("HARD", "missing-required", req, "必須のファイル/ディレクトリが存在しない"))
 
@@ -87,7 +87,7 @@ def check_required_content(
             if kit_source and rule_id == "agents-import-missing":
                 out.append(("SOFT", rule_id, path_re.pattern,
                             f"{desc}（キット原本自身は対象外——対象ファイル自体が無い。"
-                            f"{rs.KIT_SOURCE_MARKER} — GUARDRAILS.md §3.3）"))
+                            f"{rs.KIT_SOURCE_MARKER} — .guardrails/GUARDRAILS.md §3.3）"))
                 continue
             out.append(("HARD", rule_id, path_re.pattern, f"{desc}（対象ファイル自体が無い）"))
             continue
@@ -187,7 +187,7 @@ def check_ffi_boundary(texts: dict[str, str], out: list[Finding]) -> None:
 def check_log_boundary_coverage(texts: dict[str, str], out: list[Finding]) -> None:
     """missing-log-coverage（§8.4 — v2.19・Phase 31・soft・列充填で有効化）。
 
-    「この関数は重要だからログすべき」という意味判断は機械化できない（GUARDRAILS.md §8.4）。
+    「この関数は重要だからログすべき」という意味判断は機械化できない（.guardrails/GUARDRAILS.md §8.4）。
     代わりに客観的に検出できる境界（I/O・外部呼び出し・エラーハンドラ——LOG_BOUNDARY_PATTERNS・
     列充填）に対象を絞り、境界行の前後 LOG_BOUNDARY_WINDOW 行以内に単一出口のログ呼び出し
     （LOG_CALL_PATTERN）か `NO-LOG: 理由` コメント（NO_LOG_COMMENT_PATTERN）のどちらかが
@@ -217,7 +217,7 @@ def check_log_boundary_coverage(texts: dict[str, str], out: list[Finding]) -> No
                     out.append(("SOFT", "missing-log-coverage", f"{rel}:{i}",
                                 f"{label} の境界に前後{rs.LOG_BOUNDARY_WINDOW}行以内のログ被覆が無い"
                                 "（単一出口のログ呼び出しか `NO-LOG: 理由` コメントのどちらかを — "
-                                "GUARDRAILS.md §8.4）"))
+                                ".guardrails/GUARDRAILS.md §8.4）"))
 
 
 def check_ui_testid(texts: dict[str, str], out: list[Finding]) -> None:
@@ -260,7 +260,7 @@ def check_mcp_allowlist(root: Path, files: list[str], out: list[Finding]) -> Non
                             "（2026-07-07 調査の判定: プロジェクト正本の採用は "
                             f"{sorted(rs.MCP_ALLOWED_SERVERS)} のみ。追加はカタログの"
                             "「MCP・エコシステム採用規律」ゲート3条を通し、判定を記録して"
-                            " repo_scan.MCP_ALLOWED_SERVERS へ — GUARDRAILS.md §3.3・§12.4）"))
+                            " repo_scan.MCP_ALLOWED_SERVERS へ — .guardrails/GUARDRAILS.md §3.3・§12.4）"))
 
 
 def check_env_files(files: list[str], out: list[Finding]) -> None:
@@ -276,7 +276,7 @@ def check_env_files(files: list[str], out: list[Finding]) -> None:
             out.append(("HARD", "env-file-tracked", rel,
                         "実値の入り得る .env 系ファイルが追跡されている（gitleaks の内容検査を"
                         "素通りし得る経路 — 調査④）。`git rm --cached` で追跡を外し .gitignore へ、"
-                        "値は漏えい扱いでローテーションする（GUARDRAILS.md §3.3）"))
+                        "値は漏えい扱いでローテーションする（.guardrails/GUARDRAILS.md §3.3）"))
 
 
 def check_context_doc_size(root: Path, files: list[str], out: list[Finding]) -> None:
@@ -297,7 +297,7 @@ def check_context_doc_size(root: Path, files: list[str], out: list[Finding]) -> 
                                 f"{n} 行 > 上限 {limit} 行（常時読込の規約文書の肥大＝"
                                 "注意力の希釈 G3。章をフォルダ CLAUDE.md や docs/ へ分割する。"
                                 "この警告は Skills 化保留のトリガー実測でもある — "
-                                "GUARDRAILS.md §3.3・§10 保留）"))
+                                ".guardrails/GUARDRAILS.md §3.3・§10 保留）"))
                 break
 
 
@@ -494,7 +494,7 @@ def main() -> int:
     hard_count = sum(1 for f in findings if f[0] == "HARD")
     if hard_count:
         print(f"\ncheck-structure: hard違反 {hard_count} 件（コミット停止）。"
-              "規則IDで GUARDRAILS.md §3.3 を参照して違反そのものを解消する。", file=sys.stderr)
+              "規則IDで .guardrails/GUARDRAILS.md §3.3 を参照して違反そのものを解消する。", file=sys.stderr)
         return 1
     if findings:
         print(f"\ncheck-structure: soft警告 {len(findings)} 件（コミットは通る）。", file=sys.stderr)

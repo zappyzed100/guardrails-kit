@@ -1,4 +1,4 @@
-# dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: GUARDRAILS.md §12.1）
+# dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: .guardrails/GUARDRAILS.md §12.1）
 #
 # 呼び出し（§7.1: 必ず uv 経由）:
 #   uv run scripts/dev.py verbs                 … 動詞一覧と配線状態を表示

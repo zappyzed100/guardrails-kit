@@ -1,9 +1,9 @@
-# repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: GUARDRAILS.md §7.3）
+# repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: .guardrails/GUARDRAILS.md §7.3）
 #
 # generate_structure.py と check_structure.py と dev.py がこのモジュールを import する。
 # 同じ正規表現を2箇所に書くことは禁止（二重実装は必ずドリフトする — §7.3）。
 #
-# 【BINDING セクション】言語・構成バインディング（GUARDRAILS.md §11 Step 0 の表A/B/D）は
+# 【BINDING セクション】言語・構成バインディング（.guardrails/GUARDRAILS.md §11 Step 0 の表A/B/D）は
 # 本ファイル後半の「BINDING」セクションに集約してある。v2キットは言語なし（中立既定値）で
 # 出荷される——Step 0 で bindings/catalog.md の採用列の paste-block をここへ充填する。
 # 走査ロジック（前半）と言語別抽出関数（中盤）は触らない。
@@ -348,7 +348,7 @@ def _py_public_symbols(text: str) -> list[str]:
 
 
 # ============================================================================
-# BINDING — 言語・構成バインディング（GUARDRAILS.md §11 Step 0 の表A/B/Dの正本）
+# BINDING — 言語・構成バインディング（.guardrails/GUARDRAILS.md §11 Step 0 の表A/B/Dの正本）
 #
 # v2キットの出荷状態は「言語なし」——全スロットが中立既定値で、言語・構成に依存する
 # 検査は不発。Step 0 で bindings/catalog.md の採用列の paste-block をこのセクションへ
@@ -424,7 +424,7 @@ LAYER_FORBIDDEN_IMPORTS: list[tuple[str, re.Pattern, str]] = []
 # 正本4文書に加え、防壁の実体ファイル自体も対象——防壁が消えることは静かな fail-open の
 # 最悪形（G7/G9）。列は表Bの必須（例: "app"）をここへ += する。
 REQUIRED_PATHS = [
-    "AGENTS.md", "BOOTSTRAP.md", "CLAUDE.md", "GUARDRAILS.md", "GOALS.md", "bindings/catalog.md",
+    "AGENTS.md", ".guardrails/BOOTSTRAP.md", "CLAUDE.md", ".guardrails/GUARDRAILS.md", ".guardrails/GOALS.md", "bindings/catalog.md",
     ".pre-commit-config.yaml", ".gitattributes", ".python-version",
     ".claude/settings.json",
     ".claude/hooks/guard_git_bypass.py", ".claude/hooks/post_edit_format.py",
@@ -496,7 +496,7 @@ MCP_ALLOWED_SERVERS: set[str] = {"playwright"}
 REQUIRED_CONTENT_RULES: list[tuple[str, re.Pattern, re.Pattern, str]] = [
     ("agents-import-missing", re.compile(r"^CLAUDE\.md$"), re.compile(r"^@AGENTS\.md\s*$", re.M),
      "CLAUDE.md に `@AGENTS.md` インポート行が無い（Claude Code が規約の正本 AGENTS.md に"
-     "到達できない——本文の複製で代替しない — GUARDRAILS.md §6）"),
+     "到達できない——本文の複製で代替しない — .guardrails/GUARDRAILS.md §6）"),
 ]
 
 # --- テスト内 sleep 系（§3.3 test-sleep: flakyの温床。列充填）---

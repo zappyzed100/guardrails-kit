@@ -1,4 +1,4 @@
-# check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: GUARDRAILS.md §3.4）
+# check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
 #
 # commit-msg ステージのフックとして pre-commit から呼ばれ、メッセージファイルのパスを
 # 引数1つで受け取る（§7.6: pass_filenames は既定 true のまま）。
@@ -54,9 +54,9 @@ PASS_THROUGH_PREFIXES = ("Merge", "Revert", "fixup!", "squash!")
 #   fix:/feat: でテストファイルの純減（削除行>追加行）なら警告1行。既存テストの弱体化は
 #   門を欺く最短路（調査④ Clean Room QA の脅威モデル——red-first が守るのは「新テストが
 #   親で赤」まで）。正当な整理も普通に存在するため soft。TEST_PATH_PATTERNS 空なら不発。
-# 検査3（governance-without-goal — §3.4・GOALS.md 運用ルールの機械化）:
+# 検査3（governance-without-goal — §3.4・.guardrails/GOALS.md 運用ルールの機械化）:
 # 正本3文書をステージしたコミットは、メッセージ本文に「どのGに効くか」の引用が必須。
-GOVERNANCE_PATHS = frozenset({"GOALS.md", "GUARDRAILS.md", "bindings/catalog.md"})
+GOVERNANCE_PATHS = frozenset({".guardrails/GOALS.md", ".guardrails/GUARDRAILS.md", "bindings/catalog.md"})
 GOAL_CITATION = re.compile(r"\bG(1[0-4]|[1-9])\b")  # G14 新設と同時改修（v2.8・§10 Phase 19）
 _SCISSORS = ">8"  # `git commit -v` の切り取り線以降（diff本体）は本文ではない
 
@@ -232,7 +232,7 @@ def check_dependencies(staged: list[str], message_lines: list[str]) -> int:
                 print(f"HARD:undeclared-dependency ({rel}) 依存追加 {name!r} が"
                       "メッセージで宣言されていない。本文に "
                       f"`依存追加: {name} — 理由1行` を書く（依存は増えてよいが、"
-                      "黙って増えてはならない — GUARDRAILS.md §3.4 検査4）", file=sys.stderr)
+                      "黙って増えてはならない — .guardrails/GUARDRAILS.md §3.4 検査4）", file=sys.stderr)
     return violations
 
 
@@ -266,7 +266,7 @@ def check_feat_plan(subject: str, staged: list[str]) -> int:
                   "feat: に設計根拠文書（plan.md / docs/plans/ — AGENTS.md §4）の差分が無い。"
                   "根拠（1行でよい）を書いて同コミットへ含めるか、根拠を書けない構造変更なら "
                   "feat を名乗らない（意図の複利は fix⇔テスト G10 と対 — G14・"
-                  "GUARDRAILS.md §3.4 検査5）", file=sys.stderr)
+                  ".guardrails/GUARDRAILS.md §3.4 検査5）", file=sys.stderr)
     return violations
 
 
@@ -279,7 +279,7 @@ def check_feat_test(subject: str, staged: list[str]) -> None:
     if code_touched and not any(rs.is_test_file(p) for p in staged):
         print("SOFT:feat-without-test (ステージ済み変更) "
               "feat: がコードに触れるのにテストの変更が無い（新機能もテストを同梱する"
-              "——soft 警告・コミットは通る。契約と昇格条件は GUARDRAILS.md §3.4 検査6・"
+              "——soft 警告・コミットは通る。契約と昇格条件は .guardrails/GUARDRAILS.md §3.4 検査6・"
               "§10 Phase 25。AGENTS.md §8）", file=sys.stderr)
 
 
@@ -303,7 +303,7 @@ def check_test_shrink(subject: str) -> None:
         print(f"SOFT:test-shrink (ステージ済み変更) テストファイルが純減している"
               f"（追加 {added} 行 < 削除 {removed} 行）。既存テストの弱体化は門を欺く最短路"
               "（assertion の削除で緑にしていないか——正当な整理なら無視してよい・soft — "
-              "GUARDRAILS.md §3.4 検査8・調査④）", file=sys.stderr)
+              ".guardrails/GUARDRAILS.md §3.4 検査8・調査④）", file=sys.stderr)
 
 
 def check_commit_size(staged: list[str]) -> None:
@@ -326,7 +326,7 @@ def check_commit_size(staged: list[str]) -> None:
         print(f"SOFT:commit-too-large (ステージ済み変更) 純変更 {total} 行 > "
               f"上限 {rs.COMMIT_SIZE_SOFT_LIMIT} 行（生成物・lockfile 除外済み）。"
               "小さく分ける——大きな塊はどのゲートが何を検証したか追えない"
-              "（soft 警告・コミットは通る — GUARDRAILS.md §3.4 検査7）", file=sys.stderr)
+              "（soft 警告・コミットは通る — .guardrails/GUARDRAILS.md §3.4 検査7）", file=sys.stderr)
 
 
 def main(argv: list[str]) -> int:
@@ -354,7 +354,7 @@ def main(argv: list[str]) -> int:
     if subject.startswith("fix:") and not any(rs.is_test_file(p) for p in staged):
         print("HARD:fix-without-test (ステージ済み変更) "
               "fix: コミットに回帰テストの変更が1つも無い。テストを同梱するか、"
-              "テストで再現できない修正なら chore/refactor/docs を名乗る（GUARDRAILS.md §3.4）",
+              "テストで再現できない修正なら chore/refactor/docs を名乗る（.guardrails/GUARDRAILS.md §3.4）",
               file=sys.stderr)
         return 1
 
@@ -365,7 +365,7 @@ def main(argv: list[str]) -> int:
         print("HARD:governance-without-goal (ステージ済み変更) "
               f"{', '.join(touched)} を変更するのに、メッセージに効くGの引用が無い"
               "（例: `docs: §3.3 に規則追加（G4）`。どのGにも効かない変更は入れない"
-              " — GOALS.md 運用ルール・GUARDRAILS.md §3.4）", file=sys.stderr)
+              " — .guardrails/GOALS.md 運用ルール・.guardrails/GUARDRAILS.md §3.4）", file=sys.stderr)
         return 1
 
     # 検査4: 依存マニフェストへの追加はメッセージで宣言する（undeclared-dependency — §3.4）

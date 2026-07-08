@@ -8,7 +8,7 @@ Claude Code の**最初のメッセージ**として貼り付ける。
 ## これは何を削っているか（必ず読むこと）
 
 `PROMPT_claude_code.md`（通常版）が数時間かかる理由は「設定を書く」ことではなく、
-**各規則を実際に違反させて落ちることを1つずつ実測する**（GUARDRAILS.md §10 実行規律2:
+**各規則を実際に違反させて落ちることを1つずつ実測する**（.guardrails/GUARDRAILS.md §10 実行規律2:
 完了=実行結果・自己申告ではない）・**CIへ実際に push して緑/赤を実測する**・**ログ単一
 出口や確率的コンポーネントラッパーを実コードとして書く**、という検証そのものに時間が
 かかっているため。この簡易版はそれを意図的に削って速さを優先する。削った結果:
@@ -50,13 +50,13 @@ Claude Code の**最初のメッセージ**として貼り付ける。
 ## 任務
 
 このリポジトリに guardrails-kit の機構を**配線だけ**敷設する。詳細な契約・完了条件の
-正本は `GUARDRAILS.md` だが、このプロンプトでは §11 Step 0〜10 の**個別違反注入・CI実測・
+正本は `.guardrails/GUARDRAILS.md` だが、このプロンプトでは §11 Step 0〜10 の**個別違反注入・CI実測・
 参照実装の実コード化を圧縮**して進める（上の「これは何を削っているか」のとおり）。
 
 ## 手順
 
 ### Step 1 — 配置
-`GUARDRAILS.md` が無ければ zip を配置する:
+`.guardrails/GUARDRAILS.md` が無ければ zip を配置する:
 ```bash
 python3 -m zipfile -e guardrails-kit-*.zip .guardrails-kit-src   # zip の場合のみ
 python3 .guardrails-kit-src/scripts/install_kit.py

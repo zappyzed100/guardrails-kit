@@ -33,5 +33,5 @@
 | ペナルティルール（must の F で全体 C 制限） | HARD/SOFT の**二値**が上位互換——点数化は「C でも通る」余地を作る。must 項目の実体（秘密・依存監査）は gitleaks／保留（調査③）が担当 |
 | 無限ループ遮断器・ハードストップ | §2b Stop ゲートの回数上限＋「同じフックが2回連続で落ちたら原因調査」（AGENTS §10-4）が同型。スライディングウィンドウ検知は実行時層＝対象外 |
 | 独立モデルによる完了判定（grading its own homework 回避） | **不採用**——LLM 判定は非決定＝門になれない（調査③ Vibe Testing と同根）。キットの他人採点は決定的検証（Stop ゲート条件B＝check の exit code） |
-| Attractor の状態機械・versioned markdown 記憶（GOAL.md/decisions.md） | plan.md（G14 意図の保存）・BOOTSTRAP.md（監査台帳）が同型。中央メモは §13 で禁止のまま |
+| Attractor の状態機械・versioned markdown 記憶（GOAL.md/decisions.md） | plan.md（G14 意図の保存）・.guardrails/BOOTSTRAP.md（監査台帳）が同型。中央メモは §13 で禁止のまま |
 | サンドボックス・Capability 制約（Docker/WASM・ネットワーク隔離） | **対象外**（実行環境層）。Claude Code の permissions.deny 網は §2 で配線済み。コンテナ隔離は個人インフラ判断——導入してもキットの門は同じに効く（層が直交） |

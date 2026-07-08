@@ -1,4 +1,4 @@
-# stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: GUARDRAILS.md §2b）
+# stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: .guardrails/GUARDRAILS.md §2b）
 #
 # Stop フックの仕様: 応答終了時に発火し、exit 2 で終了を差し戻せる（stderr が Claude に渡る）。
 # 入力 JSON: session_id / transcript_path / stop_hook_active。stop_hook_active=true は
@@ -119,7 +119,7 @@ def main() -> int:
                 pass  # fail-open
         else:
             print("[stop-gate] 条件B スキップ（scripts/check_structure.py が無い）——"
-                  "静かな不発の禁止は本表示で満たす（GUARDRAILS.md §2b）", file=sys.stderr)
+                  "静かな不発の禁止は本表示で満たす（.guardrails/GUARDRAILS.md §2b）", file=sys.stderr)
         if not reason:
             try:
                 counter_file.unlink(missing_ok=True)
@@ -154,7 +154,7 @@ def main() -> int:
             count = 0
         if count >= MAX_REDIRECTS:
             print(f"[stop-gate] 差し戻し上限（{MAX_REDIRECTS}回）到達のため終了を許可"
-                  "（GUARDRAILS.md §2b）", file=sys.stderr)
+                  "（.guardrails/GUARDRAILS.md §2b）", file=sys.stderr)
             return 0
     try:
         counter_dir.mkdir(parents=True, exist_ok=True)
@@ -165,7 +165,7 @@ def main() -> int:
     if reason == "check":
         print("作業ツリーはクリーンだが、構造検査（dev.py check）が赤のままターンを終えようと"
               "している（§2b 条件B — v2.9）。終えてよい出口は2つだけ: (a) 規則IDで "
-              "GUARDRAILS.md §3.3 を引いて違反を解消し、規約どおりコミットする。 (b) 物理的に"
+              ".guardrails/GUARDRAILS.md §3.3 を引いて違反を解消し、規約どおりコミットする。 (b) 物理的に"
               "解消不能なら、応答の先頭を `BLOCKED:` で始めて具体的に報告する。検出された違反"
               f"（先頭5行）:\n{check_head}", file=sys.stderr)
     else:
@@ -174,7 +174,7 @@ def main() -> int:
               "終えてよい出口は2つだけ: (a) DoD を満たし規約どおりコミットして作業ツリーを"
               "クリーンにする（§3・§10 実行規律7）。 (b) 本当に手が止まる物理的ブロッカー"
               "なら、応答の先頭を `BLOCKED:` で始めて具体的に報告する。「続けますか?」で"
-              "止まるのはサボりの一形態（GUARDRAILS.md §2b）。", file=sys.stderr)
+              "止まるのはサボりの一形態（.guardrails/GUARDRAILS.md §2b）。", file=sys.stderr)
     return 2
 
 

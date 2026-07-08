@@ -1,5 +1,5 @@
 # install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.md §1）
-"""install_kit.py — ガードレール・キットの機械的インストーラ（README_SETUP.md §1 / GUARDRAILS.md §11 前段）
+"""install_kit.py — ガードレール・キットの機械的インストーラ（README_SETUP.md §1 / .guardrails/GUARDRAILS.md §11 前段）
 
 役割: zip または展開フォルダで対象リポジトリのルートに置かれたキットを、既存ファイルを
 **決して黙って上書きせずに**ルートへ展開する。判定は決定的（G1）、結果は1行1ファイルの
@@ -171,8 +171,8 @@ def main() -> int:
 
     kit_root = Path(__file__).resolve().parents[1]
     target = Path.cwd().resolve()
-    if not (kit_root / "GUARDRAILS.md").is_file():
-        print(f"INTERNAL キットの形をしていない: {kit_root}（GUARDRAILS.md が無い）")
+    if not (kit_root / ".guardrails/GUARDRAILS.md").is_file():
+        print(f"INTERNAL キットの形をしていない: {kit_root}（.guardrails/GUARDRAILS.md が無い）")
         return 2
     if kit_root == target:
         print("INTERNAL 対象リポジトリのルートで実行する（キット展開先の中ではなく）。"
@@ -337,9 +337,9 @@ def main() -> int:
     for name in removed:
         print(f"CLEANUP {name} を削除")
 
-    print("\ninstall_kit: 完了（衝突 0・検証合格）。次: GUARDRAILS.md §11 の Step 0 へ"
+    print("\ninstall_kit: 完了（衝突 0・検証合格）。次: .guardrails/GUARDRAILS.md §11 の Step 0 へ"
           "（.claude/settings.json を今回配置した場合は、先に /hooks でフック有効化の承認を）。"
-          " ブートストラップ完了後にカスタムできる項目は CUSTOMIZE.md を参照。")
+          " ブートストラップ完了後にカスタムできる項目は .guardrails/CUSTOMIZE.md を参照。")
     return 0
 
 

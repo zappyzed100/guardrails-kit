@@ -18,12 +18,12 @@
 |---|---|---|---|
 | **Superpowers**（Jesse Vincent / obra。公式マーケットプレイス収載・数万star。Simon Willison が高評価） | skills 群で brainstorm→plan→worktree→**TDD 鉄則**→二段レビューを強制。「テスト前のコードは削除」 | TDD: 本キットは fix 側のみ機械化（検査2＋red-first CI）で **feat 側が空白** | **知見1採用**→検査6 `feat-without-test`（soft）。skills 層自体は v2.11 保留に包含 |
 | 同上の plan 規律 | plan を「2〜5分粒度のタスク＋検証コマンド」に分割。チェックボックスがセッション復旧の状態ログ | 実行規律2は Phase 単位のみ。一般開発のコミット規模は未可視 | **知見2採用**→検査7 `commit-too-large`（soft・400行・列上書き可）＋心得3行（テンプレ §4/§8/§10） |
-| **GitHub Spec Kit**（Microsoft/GitHub 公式・最大手） | constitution（不変原則）→ specify→plan→tasks のCLI＋テンプレ。チェックリスト=各段の DoD | constitution ≒ GOALS.md（ただし本キットは G引用を**機械検査**——検査3）。段階 DoD ≒ BOOTSTRAP 監査（本キットは**再実行検証**） | 不採用（同等機構を門で保有）。Fowler/EPAM の実測が「解釈依存の限界」を示す——**裏書きとして Phase 25 に記録** |
+| **GitHub Spec Kit**（Microsoft/GitHub 公式・最大手） | constitution（不変原則）→ specify→plan→tasks のCLI＋テンプレ。チェックリスト=各段の DoD | constitution ≒ .guardrails/GOALS.md（ただし本キットは G引用を**機械検査**——検査3）。段階 DoD ≒ BOOTSTRAP 監査（本キットは**再実行検証**） | 不採用（同等機構を門で保有）。Fowler/EPAM の実測が「解釈依存の限界」を示す——**裏書きとして Phase 25 に記録** |
 | **Kiro**（AWS・IDE。EARS 記法・hooks・SMT 矛盾検査） | spec→design→tasks を IDE が強制。hooks はイベント駆動エージェント | hooks ≒ 本キットの .claude/hooks（本キットはコーパス回帰つき）。EARS = 受け入れ条件の形式 | 不採用（IDE ロックイン・形式強制は偽陽性>価値 §7.4。「テスト可能な受け入れ条件」は §8 の心得で充足） |
 | **BMAD-METHOD**（46k+ star） | 12+ ペルソナ（PM/Architect/QA…）のマルチエージェント。版付き成果物のハンドオフ | §5-5 で不採用済みの型。調査でも「ハンドオフのファイル受け渡しが実装で崩れる」報告 | 不採用再確認 |
 | **OpenSpec** | brownfield 向け提案先行・差分マーカー・living spec | PROMPT_claude_code_existing（棚卸し→段階有効化）が同思想。spec 鮮度は本キットでは STRUCTURE.md を機械検査 | 不採用（同等保有）。「living spec の drift」問題は本キットでは生成+diff で解決済みの型 |
 | **GSD**（61k+ star・メタプロンプト） / **Ralph Loop**（ghuntley） | 低セレモニーのプロンプト枠組み / ステートレス反復実行 | プロンプト集・実行時オーケストレーション | 対象外/不採用（v2.11 のプロンプト集型と同根。ループ実行はキット層の外——門はどの回し方でも効く） |
-| **Beads**（issue 台帳） / Memory Bank 系 | エージェント用タスク/記憶台帳 | §13 中央メモ禁止・plan.md・BOOTSTRAP.md | 不採用再確認（台帳が正当なのは「機械検証できる場合」のみ＝BOOTSTRAP の設計判断を再確認） |
+| **Beads**（issue 台帳） / Memory Bank 系 | エージェント用タスク/記憶台帳 | §13 中央メモ禁止・plan.md・.guardrails/BOOTSTRAP.md | 不採用再確認（台帳が正当なのは「機械検証できる場合」のみ＝BOOTSTRAP の設計判断を再確認） |
 | worktree 並列（Spec Kitty / Conductor / Superpowers） | ブランチ隔離の自動化 | 門はブランチ構成非依存 | 対象外（個人ワークフロー層） |
 | **Traycer** / Augment Intent | Plan→Execute→**Verify** 層・living spec の双方向更新 | Verify ≒ 本キットの門群 | 不採用（同等保有）。「spec への書き戻し」は今後の観察対象（採用ゲートを通せる機械形が出たら再評価） |
 

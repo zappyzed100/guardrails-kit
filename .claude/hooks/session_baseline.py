@@ -1,4 +1,4 @@
-# session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: GUARDRAILS.md §2c）
+# session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: .guardrails/GUARDRAILS.md §2c）
 #
 # SessionStart フック。`git status --porcelain` のパスを
 # `.claude/session/<session_id>.baseline`（1行1パス・リポジトリ相対）へ書く。
@@ -112,7 +112,7 @@ def main() -> int:
     if count > 0:
         print(f"[session-baseline] セッション開始時点の未コミット変更 {count} 件を記録した。"
               "これらのファイルへの Edit/Write は、人間が commit / stash するまでブロック"
-              "される（GUARDRAILS.md §2c）", file=sys.stderr)
+              "される（.guardrails/GUARDRAILS.md §2c）", file=sys.stderr)
     return 0
 
 

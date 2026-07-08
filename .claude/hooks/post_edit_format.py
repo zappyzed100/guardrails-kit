@@ -1,4 +1,4 @@
-# post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: GUARDRAILS.md §1）
+# post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: .guardrails/GUARDRAILS.md §1）
 #
 # 狙い: フォーマット崩れの検出地点を「コミット時」から「編集した瞬間」へ前倒しする。
 # PostToolUse の仕様: 編集自体は取り消せない。exit 2 のとき stderr が Claude に渡り

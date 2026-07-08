@@ -1,5 +1,5 @@
 このファイルの存在が「このチェックアウトはキット原本自身である」の判定マーカー
-（scripts/repo_scan.py の is_kit_source_repo / GUARDRAILS.md §3.3 kit-source-exempt）。
+（scripts/repo_scan.py の is_kit_source_repo / .guardrails/GUARDRAILS.md §3.3 kit-source-exempt）。
 
 install_kit.py の META_FILES に含まれるため導入先へは複製されない。導入先プロジェクトに
 このファイルが存在してはならない——存在すると missing-required（AGENTS.md/CLAUDE.md）と

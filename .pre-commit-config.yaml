@@ -1,4 +1,4 @@
-# .pre-commit-config.yaml — コミット/プッシュ時ゲートの正本（GUARDRAILS.md §3・§4・§7.6）
+# .pre-commit-config.yaml — コミット/プッシュ時ゲートの正本（.guardrails/GUARDRAILS.md §3・§4・§7.6）
 #
 # 前工程に行くほど検査が軽く・速く、後工程に行くほど重く・広くなる設計:
 #   commit 時 = 衛生・秘密検出・STRUCTURE.md鮮度・構造検査・メッセージ検査（数秒）
@@ -64,14 +64,14 @@ repos:
         pass_filenames: false
         files: ^(\.claude/hooks/guard_git_bypass\.py|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
 
-      # ---- §3.5 ブートストラップ監査（台帳 BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
+      # ---- §3.5 ブートストラップ監査（台帳 .guardrails/BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
       #      発火し、✅ の主張を再実行検証する。CI の --all-files では常時回る——二重の網）----
       - id: check-bootstrap
         name: "check-bootstrap (✅ の再実行検証 — §3.5)"
         entry: uv run scripts/check_bootstrap.py
         language: system
         pass_filenames: false
-        files: ^BOOTSTRAP\.md$
+        files: ^\.guardrails/BOOTSTRAP\.md$
 
       # ---- §3.4 コミットメッセージ検査（pass_filenames は既定 true のまま — §7.6 の注意）----
       - id: check-commit-msg
@@ -80,7 +80,7 @@ repos:
         language: system
         stages: [commit-msg]
 
-      # ============ BINDING: 言語別 push 段ゲート（GUARDRAILS.md §4・§11 Step 0 表A）============
+      # ============ BINDING: 言語別 push 段ゲート（.guardrails/GUARDRAILS.md §4・§11 Step 0 表A）============
       # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
       # paste-block（テスト・静的解析の pre-push フック群）をここへ貼る
       # （stages: [pre-push] は維持。コードよりゲートが先 — §11 Step 6）。

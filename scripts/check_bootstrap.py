@@ -1,8 +1,8 @@
-# check_bootstrap.py — ブートストラップ監査: BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: GUARDRAILS.md §3.5）
+# check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
 #
 # 呼び出し（§7.1: 必ず uv 経由）: uv run scripts/check_bootstrap.py
 #   exit 0 = 台帳と実体が整合 / exit 1 = 違反あり / exit 2 = 内部エラー
-#   発火: pre-commit の files: ^BOOTSTRAP\.md$（台帳に触れたコミット＝✅ 化の瞬間）
+#   発火: pre-commit の files: ^\.guardrails/BOOTSTRAP\.md$（台帳に触れたコミット＝✅ 化の瞬間）
 #         ＋ CI の --all-files（常時再監査——guard-corpus と同じ二重の網）。
 #
 # 何を機械化するか（§10 実行規律1〜4の門化 — v2.12・Phase 24）:
@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_scan as rs  # noqa: E402
 
-LEDGER = "BOOTSTRAP.md"
+LEDGER = ".guardrails/BOOTSTRAP.md"
 STEP_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "8b", "9", "10"]
 ROW_RE = re.compile(r"^\|\s*(0|1|2|3|4|5|6|7|8|8b|9|10)\s*\|[^|]*\|\s*(✅|🚧|—)\s*\|([^|]*)\|")
 DONE, WIP, NA = "✅", "🚧", "—"
@@ -280,7 +280,7 @@ def main() -> int:
         print(line, file=sys.stderr)
     if violations:
         print(f"\ncheck-bootstrap: 違反 {len(violations)} 件（コミット停止）。"
-              "GUARDRAILS.md §3.5 を参照。", file=sys.stderr)
+              ".guardrails/GUARDRAILS.md §3.5 を参照。", file=sys.stderr)
         return 1
     done = sum(1 for s in rows.values() if s[0] == DONE)
     na = sum(1 for s in rows.values() if s[0] == NA)

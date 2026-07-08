@@ -1,4 +1,4 @@
-# guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: GUARDRAILS.md §2c）
+# guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: .guardrails/GUARDRAILS.md §2c）
 #
 # PreToolUse(Edit|Write|MultiEdit)。ブロック条件は**両方**が成立する時のみ:
 #   (A) 対象 file_path が session_baseline.py の保存した baseline に含まれる
@@ -135,7 +135,7 @@ def main() -> int:
 
     if rel in baseline_lines:
         print(f"ブロック: このファイルにはセッション開始時点から人間の未コミット変更がある: "
-              f"{rel}（GUARDRAILS.md §2c 所有権ガード）。人間と AI の変更が混ざった diff は"
+              f"{rel}（.guardrails/GUARDRAILS.md §2c 所有権ガード）。人間と AI の変更が混ざった diff は"
               "原因追跡不能の温床。人間が commit / stash すれば自動的に解除される——AI 側から"
               "退避コマンドで消すのは §2 作業消失ガードが別途ブロックする。", file=sys.stderr)
         return 2

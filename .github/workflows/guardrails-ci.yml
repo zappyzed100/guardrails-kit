@@ -1,4 +1,4 @@
-# guardrails-ci.yml — 最終防衛線: ローカルフックと同一の検査を PR / main push で必ず再実行（正本: GUARDRAILS.md §5）
+# guardrails-ci.yml — 最終防衛線: ローカルフックと同一の検査を PR / main push で必ず再実行（正本: .guardrails/GUARDRAILS.md §5）
 #
 # ローカルの git フックは原理的に迂回できる（別マシン・Web エディタ等）ため、
 # checks ジョブは .pre-commit-config.yaml と全く同じ定義をそのまま再実行する
@@ -55,7 +55,7 @@ jobs:
       # ---------------------------------------------------------------------------------------
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
 
-  # ============ BINDING: 言語別テスト・解析・E2E ジョブ（GUARDRAILS.md §5・§12.4・§11 表A）============
+  # ============ BINDING: 言語別テスト・解析・E2E ジョブ（.guardrails/GUARDRAILS.md §5・§12.4・§11 表A）============
   # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
   # paste-block（テスト/解析ジョブ・E2E ジョブ・ツールチェーン固定）をここへ貼る。
   # 各ジョブに timeout-minutes を必ず付ける（checks と同じハング保険 — G11）。

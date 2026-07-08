@@ -1,4 +1,4 @@
-# post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: GUARDRAILS.md §1）
+# post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: .guardrails/GUARDRAILS.md §1）
 #
 # 整形（post_edit_format.py・自動修正系）と責務を分けた**判定系**の第2段（v2.5・Phase 12）。
 # lint の初出地点が push 段（§4）から編集直後へ2段前倒しになり、「push で落ちて再試行」の

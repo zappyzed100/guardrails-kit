@@ -1,4 +1,4 @@
-# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: GUARDRAILS.md §2）
+# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
 #
 # 呼び出し（PreToolUse: Bash。settings.json 側で `uv run python` 経由——§7.1）。
 # PreToolUse(Bash) の仕様: ブロックできるのは exit 2 **だけ**（exit 1 含む他の非0は素通し）。
@@ -191,11 +191,11 @@ def main() -> int:
         check(cmd)
     except Block as b:
         prefix = (
-            f"ブロック: {b.reason}（GUARDRAILS.md §2 作業消失ガード）。消してよい変更なら"
+            f"ブロック: {b.reason}（.guardrails/GUARDRAILS.md §2 作業消失ガード）。消してよい変更なら"
             "先に commit / stash で退避するのが正規経路。人間の指示によるものなら、その旨を"
             "人間に確認してから人間側の端末で実行する。"
             if b.loss else
-            f"ブロック: {b.reason} によるフック迂回は禁止（GUARDRAILS.md §2）。フックが"
+            f"ブロック: {b.reason} によるフック迂回は禁止（.guardrails/GUARDRAILS.md §2）。フックが"
             "落ちるなら迂回せず違反そのものを直すこと。2回連続で同じフックが落ちるなら"
             "原因調査に切り替える（ルート AGENTS.md §10-4）。"
         )
@@ -211,5 +211,5 @@ if __name__ == "__main__":
         raise
     except BaseException as exc:  # fail-closed（§2の契約——想定外エラーも exit 2）
         print(f"guard_git_bypass: フック内部エラーのため fail-closed でブロック"
-              f"（GUARDRAILS.md §2）: {exc!r}", file=sys.stderr)
+              f"（.guardrails/GUARDRAILS.md §2）: {exc!r}", file=sys.stderr)
         sys.exit(2)
