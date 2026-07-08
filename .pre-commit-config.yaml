@@ -64,6 +64,15 @@ repos:
         pass_filenames: false
         files: ^(\.claude/hooks/guard_git_bypass\.py|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
 
+      # ---- §2c 所有権ガードの回帰シナリオ再生（files: で門番3点に限定。CI の
+      #      --all-files では常時回る — v2.29・G10「§10保留」の解消）----
+      - id: ownership-guard
+        name: "ownership-guard (所有権ガード回帰シナリオ — §2c)"
+        entry: uv run scripts/check_ownership_guard.py
+        language: system
+        pass_filenames: false
+        files: ^(\.claude/hooks/session_baseline\.py|\.claude/hooks/guard_human_wip\.py|scripts/check_ownership_guard\.py)$
+
       # ---- §3.5 ブートストラップ監査（台帳 .guardrails/BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
       #      発火し、✅ の主張を再実行検証する。CI の --all-files では常時回る——二重の網）----
       - id: check-bootstrap

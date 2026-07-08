@@ -47,6 +47,7 @@
 - `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
 - `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
 - `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
+- `scripts/check_ownership_guard.py` — check_ownership_guard.py — 所有権ガード(§2c)の回帰シナリオ再生（契約: .guardrails/GUARDRAILS.md §2c）
 - `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: .guardrails/GUARDRAILS.md §5）
 - `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: .guardrails/GUARDRAILS.md §7.5・§3.3）
 - `scripts/dev.py` — dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: .guardrails/GUARDRAILS.md §12.1）
@@ -132,6 +133,16 @@
 - def make_fixture
 - def replay
 - def probe
+- def main
+
+### `scripts/check_ownership_guard.py`
+- class Repo
+- def scenario_clean_start_allows_new_file
+- def scenario_human_wip_blocks_edit
+- def scenario_human_wip_commit_lifts_block
+- def scenario_compact_skips_rebaseline
+- def scenario_compact_preserves_existing_human_baseline
+- def scenario_unknown_source_falls_back_to_rebaseline
 - def main
 
 ### `scripts/check_red_first.py`
