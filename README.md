@@ -75,6 +75,7 @@ EPAM の constitution 事例——`surveys/SURVEY_FAMOUS_KITS.md`）。
 - `scripts/check_bootstrap.py` — 虚偽✅の再実行監査。約250行で読み切れます。
 - `README_SETUP.md` の各版セクション — 変更だけでなく**是正の記録**（自分のミスの検出と
   修正——検査番号の欠番、規則IDの記載漏れ等——も監査結果として残しています）。
+- `CUSTOMIZE.md` — 導入後にカスタムできる項目の索引。ブートストラップ完了後の入口。
 
 ## 何ではないか（正直な注意書き）
 

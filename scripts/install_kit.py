@@ -338,7 +338,8 @@ def main() -> int:
         print(f"CLEANUP {name} を削除")
 
     print("\ninstall_kit: 完了（衝突 0・検証合格）。次: GUARDRAILS.md §11 の Step 0 へ"
-          "（.claude/settings.json を今回配置した場合は、先に /hooks でフック有効化の承認を）")
+          "（.claude/settings.json を今回配置した場合は、先に /hooks でフック有効化の承認を）。"
+          " ブートストラップ完了後にカスタムできる項目は CUSTOMIZE.md を参照。")
     return 0
 
 
