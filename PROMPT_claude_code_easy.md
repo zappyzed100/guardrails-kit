@@ -65,7 +65,12 @@ python3 .guardrails-kit-src/scripts/install_kit.py
 `PROMPT_claude_code.md` の該当コマンドと同じ）
 `.claude/settings.json` 配置直後、ユーザーに「`/hooks` で PreToolUse: Bash・
 Edit|Write|MultiEdit / PostToolUse / Stop / SessionStart の4種5エントリの有効化を確認し、
-承認したら『続行』と返信してください」とだけ依頼して待つ（ここは省略しない）。
+承認したら『続行』と返信してください」とだけ依頼して待つ（ここは省略しない）。『続行』を
+受けたら `git commit --no-verify` を1回試し、**実際にブロックされるか**を確認する
+（`/hooks` の表示が有効でもブロックされない場合、`.claude/settings.json` を**このセッション
+中に新規作成**したことで設定が未反映という既知の症状の可能性がある——特に VSCode 拡張の
+パネル経由。その場合はセッションを終了し、ウィンドウをリロード/`claude` を直接再起動して
+から続ける）。
 
 ### Step 2 — 骨格とバインディング充填（一括）
 1. `AGENTS.md.template` → `AGENTS.md`、`CLAUDE.md.template` → `CLAUDE.md` を完成させる

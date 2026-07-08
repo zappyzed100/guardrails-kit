@@ -58,7 +58,13 @@ sys.exit(subprocess.run([sys.executable, hits[0]]).returncode)
 「`/hooks` で PreToolUse: Bash・Edit|Write|MultiEdit / PostToolUse / Stop / SessionStart
 の4種5エントリの有効化を確認し、承認したら『続行』と返信してください」とだけ依頼して
 待つ（§10 の質問集約の唯一の例外。ここが無効のままだと §1・§2・§2b・§2c の防壁が
-静かに不在になる — fail-open）。
+静かに不在になる — fail-open）。『続行』を受けたら `git commit --no-verify` を1回試し、
+**実際にブロックされるか**を実測で確認する。`/hooks` の表示が有効でもブロックされない
+場合は、`.claude/settings.json` を**このセッション中に新規作成**したことで、プロセスが
+起動時にしかフック設定を読み込んでおらず未反映という既知の症状の可能性がある（特に
+VSCode 拡張のパネル経由）。その場合はユーザーに「このセッションを終了し、VSCode なら
+拡張のウィンドウをリロード（または別のターミナルで `claude` を同じディレクトリで直接
+起動）してから新しいセッションで続きを」と依頼して終了する。
 
 ## 配置済みファイル（重要: ゼロから書き直さない）
 
