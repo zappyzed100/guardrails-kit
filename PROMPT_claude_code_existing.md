@@ -48,9 +48,9 @@ v2キットは言語なしで出荷され、言語固有値は `bindings/catalog
 （動詞ルーター。COMMANDS が充填先——§12.1）、`GOALS.md`・`bindings/catalog.md`（正本）、
 `scripts/generate_structure.py` / `check_structure.py` / `check_commit_msg.py`（BINDING 参照のみ）、
 `.pre-commit-config.yaml`（BINDING マーカー以下の pre-push フック群）、
-`.claude/hooks/post_edit_format.sh`・`post_edit_lint.sh`（case 分岐——整形とlintの直列2段 §1）、
+`.claude/hooks/post_edit_format.py`・`post_edit_lint.py`（DISPATCH 辞書——整形とlintの直列2段 §1）、
 `.claude/hooks/guard_git_bypass.py`（迂回＋作業消失ガード）・
-`.claude/hooks/stop_incomplete_guard.sh`（§2b）・`.claude/settings.json`（言語非依存）、
+`.claude/hooks/stop_incomplete_guard.py`（§2b）・`.claude/settings.json`（言語非依存）、
 `tests/guard_corpus.tsv`＋`scripts/check_guard_corpus.py`（§2 の門番回帰テスト・言語非依存）、
 `.github/workflows/guardrails-ci.yml`（BINDING マーカー以下）、
 `.python-version`・`.gitattributes`・`CLAUDE.md.template`・`scripts/install_kit.py`

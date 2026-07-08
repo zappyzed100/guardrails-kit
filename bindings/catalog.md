@@ -21,7 +21,7 @@
 |---|---|
 | 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
 | ランタイム（表D — §12） | `up`／`reset`（seed込み）／`seed`／`time`（時刻注入）／`db`（DB読み）／`e2e`／操作レール（実UI操作の手段）／観察レール（コンソール・ネットワーク・ログの読み方）／UIテストID検査（`ui-missing-testid`）／外部I/Oシームの置き場所 |
-| paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.sh` case／**`post_edit_lint.sh` case（v2.5）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
+| paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.py` DISPATCH／**`post_edit_lint.py` DISPATCH（v2.5導入・v2.24でPython化）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
 
 ### 「非推奨・世代交代パターン」の出典規律（v2.6 — §3.3 deprecated-api の列を埋める時の正本）
 
@@ -45,6 +45,24 @@
 | python-uv | ruff `C901`（mccabe） | `PLR0912`（分岐）・`PLR0913`（引数）・`PLR0915`（文数） |
 | rust | clippy `cognitive_complexity`（nursery——安定化まで任意） | `clippy::too_many_arguments`・`clippy::too_many_lines` |
 | dart-flutter | `dart_code_metrics` の cyclomatic-complexity 等（サードパーティ——採用時は列の版上げで記録） | 同左 maximum-nesting-level 等 |
+
+### post_edit フックの速度3原則（v2.24 — `DISPATCH` を列で埋める時の正本）
+
+`post_edit_format.py`/`post_edit_lint.py` は編集の度に発火するホットパス。フック本体を
+どの言語で書くかより、**ここに書くコマンドが何を呼ぶか**の方が体感速度への影響が大きい
+（実測: `npx prettier` はローカルinstall済みでも約900ms/回、直接呼び出しなら約240ms/回
+——差の680msはnpx自身の解決コストで、Node起動コスト約40msの遥か上）。優先順位:
+
+1. **ネイティブ単一バイナリを選ぶ**（Rust/Go製）。Node製ツール（素のESLint/Prettier）は
+   毎回Node起動コストが乗る。ruff・biome・rustfmt・dart formatはこの起動税がゼロ。
+2. **ラッパー越しに呼ばない**。`npx`/`uvx` はフックのたびに環境解決を走らせる
+   （実測差は上記）。`node_modules/.bin/<tool>` や `uv tool install` 後の直接PATH呼び出しを使う。
+3. **それでも足りなければ常駐（daemon）化を検討する**（例: Biomeのdaemon/LSP）。
+   1ファイルだと実際の処理よりプロセス起動そのものが支配的になるため、何千回もの
+   起動コストを常駐プロセスで償却する——ただしキット側では未実装（列採用時の判断）。
+
+フックの言語（Python固定）と、フックが呼ぶformat/lintツールの言語は独立——TSを触るなら
+Biome、Goを触るならgofmtを、Pythonフックから普通に呼べばよい。
 
 ### ログ境界パターンの出典規律（v2.19 — §8.4 missing-log-coverage の `LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN` を列で埋める時の正本）
 
@@ -167,34 +185,32 @@ COMMANDS = {
 }
 ```
 
-**paste-block（`post_edit_format.sh` の case へ）**:
+**paste-block（`post_edit_format.py` の DISPATCH へ — v2.24でPython化。直接バイナリ呼び出し）**:
 
-```bash
-  *.ts|*.tsx)
-    command -v npx >/dev/null 2>&1 || exit 0
-    if ! err=$(npx prettier --write "$file_path" 2>&1 >/dev/null); then
-      printf 'prettier が失敗（構文エラーの可能性）。直後に修正すること:\n%s\n' "$err" >&2
-      exit 2
-    fi
-    ;;
+`npx` は使わない——ローカル install 済みの `prettier` でも `npx prettier --version` は実測
+約900ms/回、`node_modules/.bin/prettier` の直接呼び出しなら約240ms/回（差の680msの大半は
+npx自身の解決コストでNode起動コストではない。編集の度に発火するホットパスでは、この差が
+フック本体の言語移行より効く — §7.7・G11）。
+
+```python
+DISPATCH[".ts"] = DISPATCH[".tsx"] = [["node_modules/.bin/prettier", "--write", "{file}"]]
 ```
 
-**paste-block（`post_edit_lint.sh` の case へ — v2.5）**:
+**paste-block（`post_edit_lint.py` の DISPATCH へ — v2.5導入・v2.24でPython化）**:
 
-```bash
-  *.ts|*.tsx|*.js|*.jsx)
-    if command -v npx >/dev/null 2>&1; then
-      npx --no-install eslint --max-warnings=0 "$file_path" 1>&2
-      rc=$?
-      [ "$rc" -eq 1 ] && exit 2   # 1 = 違反あり（stderr が Claude へ渡り即修正 — §1）
-      if [ "$rc" -ge 2 ]; then    # 2以上 = 実行不能（未導入・設定不足）。ブロックしない
-        echo "[post-edit-lint] eslint を実行できない（rc=$rc）ため素通し: push 段で回収される" >&2
-      fi
-    else
-      echo "[post-edit-lint] lint 未導入のため素通し（npx が無い）: push 段の CI で回収される" >&2
-    fi
-    ;;
+```python
+_ESLINT = [["node_modules/.bin/eslint", "--max-warnings=0", "{file}"]]
+DISPATCH[".ts"] = DISPATCH[".tsx"] = DISPATCH[".js"] = DISPATCH[".jsx"] = _ESLINT
 ```
+
+**代替案（最速志向・要実測): Biome への統合**——単一ネイティブバイナリで format+lint+import整理
+を1execで済ませる（prettier+eslintの2exec構成より起動コストが半分で済む）。公開ベンチマークで
+ESLintの10〜35倍・Prettierの35倍という報告があり（出典下記）、Rust製で Node ランタイム自体の
+起動コストも無い。採用する場合は `DISPATCH[".ts"] = [["node_modules/.bin/biome", "check",
+"--write", "{file}"]]` の1行に統合できる。本キットはprettier+eslintを既定のまま維持——
+乗り換えは各プロジェクトの判断（列の版上げで記録）。
+出典: [Biome migration guide 2026](https://dev.to/pockit_tools/biome-the-eslint-and-prettier-killer-complete-migration-guide-for-2026-27m)・
+[ESLint vs Biome comparison](https://reintech.io/blog/eslint-vs-biome-javascript-linting-comparison-2026)。
 
 **paste-block（`.pre-commit-config.yaml` の BINDING へ）**:
 
@@ -337,7 +353,9 @@ LOG_EXIT_FILES |= {"src/log.py"}   # 実パスへ調整（scripts/ 配下は LOG
 
 `dev.py` COMMANDS: `test=[["uv","run","pytest","-q"]]`・`fmt=[["uvx","ruff","format","."]]`、
 残りは構成依存で充填。pre-push/CI は ruff check・pytest を ts 列と同じ形で並べる。
-`post_edit_format.sh` case: `*.py)` → `uvx ruff format "$file_path"`（キットの `scripts/*.py` にも当たる）。
+`post_edit_format.py` DISPATCH: `DISPATCH[".py"] = [["ruff", "format", "{file}"]]`
+（`uv tool install ruff` 前提——直接バイナリの理由は下の lint paste-block 注記と同じ。
+キットの `scripts/*.py` にも当たる）。
 
 **サンプル実装（`src/log.py` へ配置——§8.2・§8.4 の単一出口。実行して有効なJSON出力を
 確認済み・2026-07-08）**:
@@ -399,22 +417,20 @@ def log_op(
 変えるのも自由）・ログレベルのフィルタリング閾値。**変更したら列の版を上げて記録する**
 （G5）。
 
-**paste-block（`post_edit_lint.sh` の case へ — v2.5・実測済み）**:
+**paste-block（`post_edit_lint.py` の DISPATCH へ — v2.5導入・v2.24でPython化。実測済み）**:
 
-```bash
-  *.py)
-    if command -v uvx >/dev/null 2>&1; then
-      uvx ruff check "$file_path" 1>&2
-      rc=$?
-      [ "$rc" -eq 1 ] && exit 2   # 1 = 違反あり（stderr が Claude へ渡り即修正 — §1）
-      if [ "$rc" -ge 2 ]; then    # 2以上 = 実行不能（usage error 等）。ブロックしない
-        echo "[post-edit-lint] ruff を実行できない（rc=$rc）ため素通し: push 段で回収される" >&2
-      fi
-    else
-      echo "[post-edit-lint] lint 未導入のため素通し（uvx が無い）: push 段の CI で回収される" >&2
-    fi
-    ;;
+`uvx ruff` ではなく `uv tool install ruff` で直接PATHへ入れたバイナリを叩く——実測:
+`uvx ruff --version` 約218ms/回 → 直接 `ruff --version` 約156ms/回（Windows実機）。
+`uvx`は毎回ツールの解決を行うため、編集の度に発火するホットパスでは差が積む。
+Step 0で `uv tool install ruff` を実行してから以下を充填する（前提: PATHにruffが通ること）。
+
+```python
+DISPATCH[".py"] = [["ruff", "check", "{file}"]]
 ```
+
+（`uv tool install ruff` を実行しない/できない環境では `["uvx", "ruff", "check", "{file}"]`
+のまま使ってもよい——動作は同じで約60ms/回遅いだけ。速度より導入の手軽さを優先する
+判断も正当。DoD実測: 違反→exit 2＋stderr／クリーン→exit 0／ツール未導入→表示素通し）
 
 ---
 
@@ -474,7 +490,11 @@ REQUIRED_PATHS += ["app"]
 REQUIRED_SOFT_PATHS += ["app/CLAUDE.md"]
 ```
 
-`post_edit_format.sh` case: `*.dart)` → `dart format --quiet`（失敗時 exit 2、原本と同じ）。
+`post_edit_format.py` DISPATCH: `DISPATCH[".dart"] = [["dart", "format", "{file}"]]`
+（`dart format` は Dart SDK 同梱のネイティブツールでラッパー越しではない——npx/uvx
+相当の追加コストは元から無い。**`--set-exit-if-changed` は付けない**——post_edit_format.py
+は非0を「整形失敗＝構文エラーの可能性」としてブロックする契約なので、そのフラグを付けると
+「変更があっただけ」でも exit 2 になり誤ってブロックする。失敗時 exit 2、原本と同じ）。
 pre-push/CI: `flutter analyze --fatal-infos`・`flutter test`（`cd app`）。CI は `subosito/flutter-action@v2`。
 
 ---
@@ -535,7 +555,14 @@ REQUIRED_PATHS += ["engine"]
 REQUIRED_SOFT_PATHS += ["engine/CLAUDE.md"]
 ```
 
-`post_edit_format.sh` case: `*engine/src/*.rs)` → `(cd "$crate_dir" && cargo fmt --quiet)`（原本と同じ）。
+`post_edit_format.py` DISPATCH: `DISPATCH[".rs"] = [["rustfmt", "{file}"]]`（原本の
+`cargo fmt` はクレート単位で cwd 切替が要るが、post_edit_format.py の DISPATCH は
+1コマンド1ファイルの単純な argv 実行のみを想定するため、`cargo fmt` が内部で呼ぶ
+`rustfmt` を単一ファイルに直接向ける形へ変更した——ネイティブバイナリでラッパー越しでも
+なく、post-edit の「1ファイル・数秒予算」という契約そのものにも rustfmt 単体呼び出しの
+方が合っている。cwd切替が要る場合は列側で argv を `["bash","-c","cd \"$(dirname {file})\"
+&& cargo fmt"]` のように組み立てる——DISPATCH は素の argv リストなので shell 機能が
+要るケースは `bash -c` を1段挟む。）
 pre-push/CI: `cargo clippy --all-targets -- -D warnings`・`cargo test`・`cargo fmt --check`（`dtolnay/rust-toolchain`＋`Swatinem/rust-cache`）。
 
 ---

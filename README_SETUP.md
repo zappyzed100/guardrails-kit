@@ -29,6 +29,33 @@
 | まっさらな新規リポジトリ | `PROMPT_claude_code.md` | 骨格を作り、ゲートを先に立て、違反ゼロから始める |
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 
+## v2.24 での変更点（v2.23 からの完遂＋是正。根拠は `GOALS.md` のG）
+
+v2.23で見送った残り4フックについて、ユーザーから「統一した方がよい」という判断が入り、
+同一セッションで完遂した回（正本: GUARDRAILS.md §10 Phase 34）。あわせて「フック本体を
+Pythonにしても、呼び出すツールが遅ければ意味が薄い」という指摘を受け、post-editフックが
+呼ぶ外部ツールの呼び方も見直した。
+
+- **`stop_incomplete_guard.py`・`session_baseline.py`・`post_edit_format.py`・
+  `post_edit_lint.py`**: 全てPython化。実測は698ms→157ms（3.5倍）・356ms→171ms
+  （2.1倍）等。`session_baseline.py`は移植直後にCRLF/LF不一致（Windowsでの
+  `write_text`既定動作）を検出・修正——bash版とのバイト完全一致を確認。
+- **post_edit フックが呼ぶツールの直接呼び出し化**（`bindings/catalog.md`「post_edit
+  フックの速度3原則」）: `npx prettier`（実測約900ms/回・ローカルinstall済みでも）を
+  `node_modules/.bin/prettier`直接呼び出し（約240ms/回）へ、`uvx ruff`（約218ms/回）を
+  `uv tool install ruff`後の直接呼び出し（約156ms/回）へ変更。**この差はフック本体の
+  言語移行そのものより実利用への影響が大きい**——ホットパスの支配コストは「ガードの
+  コード」ではなく「ガードが待つツール」だった。
+- **Biomeを ts-react-web 列の代替として調査・記録**（採用はせず）: 公開ベンチマークで
+  ESLint比10〜35倍・Prettier比35倍という報告を確認し出典つきで記録。単一バイナリで
+  lint+format+import整理を1execに収められる点も記録したが、既定（prettier+eslint）は
+  維持——乗り換えは各プロジェクトの判断（列の版上げで記録する設計は変えない）。
+- **rust列の整形を`cargo fmt`（クレート単位・cwd切替要）から`rustfmt {file}`
+  （単一ファイル直接）へ変更**: DISPATCH辞書が素のargv実行のみを想定するための対応
+  だが、post-editの「1ファイル・数秒予算」という契約そのものにも単一ファイル直接
+  呼び出しの方が合っている。
+- 全6フックがPython化で統一——`.claude/hooks/`配下にbash実装は0本になった。
+
 ## v2.23 での変更点（v2.22 からの言語移行。根拠は `GOALS.md` のG）
 
 「他にも同種の遅い実装は無いか」「そもそもbash採用に根拠はあるか」というユーザーの
@@ -640,10 +667,10 @@ zip・展開元フォルダを自動削除する（残したい場合は `--keep
 │   └── hooks/
 │       ├── guard_git_bypass.py       … §2: 迂回（--no-verify / SKIP= 等）と非可逆な作業消失を exit 2 でブロック（v2.23でPython化）
 │       ├── guard_human_wip.py        … §2c: 人間の未コミット変更への Edit/Write をブロック（v2.6・fail-open。v2.23でPython化）
-│       ├── session_baseline.sh       … §2c: セッション開始時点の dirty パス集合を保存（v2.6）
-│       ├── post_edit_format.sh       … §1: 編集直後の整形（第1段・自動修正系）
-│       ├── post_edit_lint.sh         … §1: 編集直後の lint（第2段・判定系——v2.5）
-│       └── stop_incomplete_guard.sh  … §2b: 未完了のターン終了を差し戻す（条件A=未コミット・条件B=check赤 v2.9。fail-open）
+│       ├── session_baseline.py       … §2c: セッション開始時点の dirty パス集合を保存（v2.6・v2.24でPython化）
+│       ├── post_edit_format.py       … §1: 編集直後の整形（第1段・自動修正系。v2.24でPython化）
+│       ├── post_edit_lint.py         … §1: 編集直後の lint（第2段・判定系——v2.5・v2.24でPython化）
+│       └── stop_incomplete_guard.py  … §2b: 未完了のターン終了を差し戻す（条件A=未コミット・条件B=check赤 v2.9。fail-open・v2.24でPython化）
 ├── .github/
 │   └── workflows/
 │       └── guardrails-ci.yml         … §5: 最終防衛線（キット名前空間——既存 CI と衝突しない）
