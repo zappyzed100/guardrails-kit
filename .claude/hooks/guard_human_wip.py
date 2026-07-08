@@ -101,7 +101,20 @@ def main() -> int:
         return warn_and_pass(
             f"baseline が無い（SessionStart フック未発火か保存失敗: {session_id}.baseline）")
 
-    # ---- 条件(B): 現在も未コミットか ----
+    try:
+        baseline_lines = baseline_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return warn_and_pass(f"baseline を読めない: {session_id}.baseline")
+    if not baseline_lines:
+        return 0  # セッション開始時点でクリーン＝守る対象が無い（git を呼ぶ必要が無い）
+
+    # ---- 条件(A) を先に見る（git 不要）: 明らかに baseline 非該当なら即抜ける ----
+    # candidate が None（root 外・解決不能）の時だけ、確認のため下の git 経路へ進む。
+    candidate = local_rel_candidate(root, file_path)
+    if candidate is not None and candidate not in baseline_lines:
+        return 0
+
+    # ---- ここから先は「baseline 該当の疑いがある」少数派のみ: 条件(B) を git で確認 ----
     try:
         proc = subprocess.run(["git", "-C", root, "status", "--porcelain", "--", file_path],
                                capture_output=True, timeout=30)
@@ -120,11 +133,6 @@ def main() -> int:
     if not rel:
         return 0
 
-    # ---- 条件(A): セッション開始時点でも dirty だったか（baseline の完全一致行） ----
-    try:
-        baseline_lines = baseline_file.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return warn_and_pass(f"baseline を読めない: {session_id}.baseline")
     if rel in baseline_lines:
         print(f"ブロック: このファイルにはセッション開始時点から人間の未コミット変更がある: "
               f"{rel}（GUARDRAILS.md §2c 所有権ガード）。人間と AI の変更が混ざった diff は"
