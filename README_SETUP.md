@@ -31,10 +31,9 @@
 
 ## v2.24 での変更点（v2.23 からの完遂＋是正。根拠は `GOALS.md` のG）
 
-v2.23で見送った残り4フックについて、ユーザーから「統一した方がよい」という判断が入り、
-同一セッションで完遂した回（正本: GUARDRAILS.md §10 Phase 34）。あわせて「フック本体を
-Pythonにしても、呼び出すツールが遅ければ意味が薄い」という指摘を受け、post-editフックが
-呼ぶ外部ツールの呼び方も見直した。
+v2.23で見送った残り4フックの言語統一を完遂した回（正本: GUARDRAILS.md §10 Phase 34）。
+あわせて、フック本体をPython化しても呼び出すツールが遅ければ効果が薄いという観点から、
+post-editフックが呼ぶ外部ツールの呼び方も見直した。
 
 - **`stop_incomplete_guard.py`・`session_baseline.py`・`post_edit_format.py`・
   `post_edit_lint.py`**: 全てPython化。実測は698ms→157ms（3.5倍）・356ms→171ms
