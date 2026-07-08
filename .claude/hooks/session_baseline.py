@@ -13,8 +13,23 @@
 # core.quotePath による引用表記（非ASCIIパス等）は近似の範囲外——実測されたら
 # guard_human_wip.py と同一コミットで直す。
 #
-# v2.23（G11・言語移行）: SessionStart は1セッション1回のみの発火（編集直後系ホット
-# パスほど頻度は高くないが、他フックとの実装言語統一のため移植する）。
+# v2.23（G11・言語移行）: 実装言語統一のため移植する。
+#
+# v2.29（G7・実測で訂正）: 上記 v2.23 の前提「SessionStart は1セッション1回のみの発火」は
+# 誤りだった。公式仕様（source: "startup"|"resume"|"clear"|"compact"）通り、compact
+# （要約）でも SessionStart は再発火する。source を見ずに毎回 git status を無条件で
+# baseline へ書いていたため、compact 直前に AI 自身が書きかけ・未コミットだったファイルが
+# 丸ごと「人間の WIP」として焼き付き、以後そのファイルへの Edit/Write が誤ブロックされ
+# 続ける事故が実機で発生した（同一 session_id の transcript を直接調査し、compact 直後の
+# SessionStart で baseline が書き換わったことを確認済み）。
+# 対策: source == "compact" の時は baseline に一切触れず即 return する（人間が新たに
+# 並行編集を始める余地が無い自動イベントのため）。「空を書く」実装は誤り——それだと
+# 真の startup 時点の baseline（本物の人間 WIP の記録）を破壊し、今回と同じ事故を再現する。
+# source が取得できない・想定外値の場合は安全側（従来通り git status を取って書く）に倒す。
+# 既知の限界: この対策は session_id が compact を跨いで安定するという前提に依存する
+# （現行バージョンでは実測確認済み——同一 session_id の transcript 内に isCompactSummary
+# レコードが存在。ハーネス側の将来変更でこれが崩れたら、上記フォールバックにより従来の
+# 誤検知が復活する——.guardrails/GUARDRAILS.md §2c 参照）。
 
 from __future__ import annotations
 
@@ -63,6 +78,11 @@ def main() -> int:
         payload = json.loads(raw) if raw.strip() else {}
     except ValueError:
         payload = {}
+
+    if payload.get("source") == "compact":
+        print("[session-baseline] source=compact のため baseline 更新をスキップ"
+              "（既存 baseline を保持——.guardrails/GUARDRAILS.md §2c）", file=sys.stderr)
+        return 0
 
     root = resolve_root()
     if not root or not os.path.isdir(root):
