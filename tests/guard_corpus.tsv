@@ -72,3 +72,5 @@ ALLOW	dirty	git checkout -b feature/x
 ALLOW	dirty	git clean -n
 ALLOW	dirty	git stash
 ALLOW	dirty	git add . && git commit -m "feat: x"
+ALLOW	git config --get core.hooksPath
+ALLOW	git status && find . -newer .pre-commit-config.yaml
