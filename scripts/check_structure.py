@@ -96,21 +96,33 @@ def check_required_content(
 
 
 def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
+    """test-sleep / test-nondeterminism / test-network / test-calls-solver-direct。
+
+    先頭3つは非決定性の再現がテストの本質という正当なケースがある（§9.5・v2.25・
+    Phase 35）。境界行の前後 NONDETERMINISM_EXEMPT_WINDOW 行以内に
+    `NONDETERMINISM-EXEMPT: 理由` コメントがあれば免除する——missing-log-coverage の
+    NO-LOG と同じ「存在検査のみ」の境界。test-calls-solver-direct は別機構
+    （SOLVER_TEST_WRAPPER_NAME の同一行検査）で既に免除経路を持つため対象外。
+    """
     for rel, text in texts.items():
         if not rs.is_test_file(rel):
             continue
         ext = rs.ext_of(rel)
+        lines = text.splitlines()
         for i, line in _iter_code_lines(ext, text):
+            lo = max(0, i - 1 - rs.NONDETERMINISM_EXEMPT_WINDOW)
+            hi = i - 1 + rs.NONDETERMINISM_EXEMPT_WINDOW + 1
+            exempt = any(rs.NONDETERMINISM_EXEMPT_PATTERN.search(w) for w in lines[lo:hi])
             for pat, label in rs.SLEEP_PATTERNS.get(ext, []):
-                if pat.search(line):
+                if pat.search(line) and not exempt:
                     out.append(("HARD", "test-sleep", f"{rel}:{i}",
                                 f"テスト内の {label}（flakyの温床 — §3.3）"))
             for pat, label in rs.NONDETERMINISM_PATTERNS.get(ext, []):
-                if pat.search(line):
+                if pat.search(line) and not exempt:
                     out.append(("HARD", "test-nondeterminism", f"{rel}:{i}",
                                 f"テスト内の非決定入力: {label}（§9.2）"))
             for pat, label in rs.TEST_NETWORK_PATTERNS.get(ext, []):
-                if pat.search(line):
+                if pat.search(line) and not exempt:
                     out.append(("HARD", "test-network", f"{rel}:{i}",
                                 f"テスト内の外部I/O直呼び: {label}"
                                 "（記録済みフィクスチャ/フェイクを注入する — §9.5）"))

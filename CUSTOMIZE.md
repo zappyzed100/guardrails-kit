@@ -40,6 +40,8 @@
 
 - `RED-FIRST-EXEMPT: 理由` → GUARDRAILS.md §5
 - `NO-LOG: 理由` → GUARDRAILS.md §8.4
+- `NONDETERMINISM-EXEMPT: 理由` → GUARDRAILS.md §9.5（test-sleep/test-nondeterminism/
+  test-network——非決定性の再現がテストの本質という正当なケース）
 - `gitleaks:allow` → GUARDRAILS.md §3.1
 - `install_kit.py --skip <パス>` → 既存ファイルを意図して維持する時
 

@@ -508,6 +508,17 @@ NONDETERMINISM_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 # --- テスト内 外部I/O（§9.5 test-network: 外部I/Oの検疫。列充填）---
 TEST_NETWORK_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 
+# --- 非決定性テストの免除（test-sleep/test-nondeterminism/test-network 共通 —
+# §9.5・v2.25・Phase 35）---
+# 非決定性の再現そのものがテストの本質という正当なケースがある（例: 実ブラウザが
+# ヘッダーとbodyを分割TCP書き込みするタイミングのズレを再現する回帰テストは、
+# sleep と生ソケットの両方が意図的に必要）。境界行の前後
+# NONDETERMINISM_EXEMPT_WINDOW 行以内に `NONDETERMINISM-EXEMPT: 理由` コメントが
+# あれば免除する。理由の妥当性は検証しない——存在検査のみ（NO-LOG / RED-FIRST-EXEMPT
+# と同じ境界の引き方 — G9）。
+NONDETERMINISM_EXEMPT_PATTERN = re.compile(r"NONDETERMINISM-EXEMPT:\s*\S")
+NONDETERMINISM_EXEMPT_WINDOW = 3  # 中立既定値・列上書き可
+
 # --- 世代交代・非推奨 API（§3.3 deprecated-api — v2.6・Phase 15。列充填）---
 # LLM が訓練カットオフの都合で書きがちな旧作法を、プロンプト規則（心得）でなく
 # 列パターン（門）として封鎖する。テスト内限定でなく**全コード走査**（テスト含む）。
