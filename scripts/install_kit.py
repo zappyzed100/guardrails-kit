@@ -104,9 +104,9 @@ def settings_ok(kit_file: Path, target_file: Path) -> bool:
     if not all(d in tgt_deny for d in kit_deny):
         return False
     dump = json.dumps(tgt)
-    return ("guard_git_bypass.sh" in dump and "post_edit_format.sh" in dump
+    return ("guard_git_bypass.py" in dump and "post_edit_format.sh" in dump
             and "post_edit_lint.sh" in dump and "stop_incomplete_guard.sh" in dump
-            and "session_baseline.sh" in dump and "guard_human_wip.sh" in dump)
+            and "session_baseline.sh" in dump and "guard_human_wip.py" in dump)
 
 
 def git(target: Path, *args: str) -> subprocess.CompletedProcess:

@@ -29,6 +29,28 @@
 | まっさらな新規リポジトリ | `PROMPT_claude_code.md` | 骨格を作り、ゲートを先に立て、違反ゼロから始める |
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 
+## v2.23 での変更点（v2.22 からの言語移行。根拠は `GOALS.md` のG）
+
+「他にも同種の遅い実装は無いか」「そもそもbash採用に根拠はあるか」というユーザーの
+問いを受け、全フックを棚卸しし、`guard_git_bypass.sh`（v2.22是正後も jq・sed の2プロセスが
+残存）と `guard_human_wip.sh` を Python へ完全移行した回（正本: GUARDRAILS.md §10 Phase 33）。
+
+- **Go/Rustも候補に入れてセットアップ時に最速を実測選択する案は不採用**: 実装が
+  言語の数だけ増えG5「単一の正」に反する・Step 0にコンパイル/ベンチマーク工程が
+  増えG13「移植の定数時間」に反する・Go/Rustのツールチェーンがキット自体の新規
+  必須依存になり重複排除ゲート違反（キットの必須言語ツールは `uv` のみ）。
+- **`guard_git_bypass.py`**: jq/sed/grep/tr の子プロセスが標準ライブラリで完結し
+  git status 呼び出し以外はゼロに。実測 約243ms/回→約150ms/回。コーパス全74行を
+  10回連続PASS。書き換え中にPython版own のバグ2件を発見・修正（stdinのUTF-8未設定・
+  検証ハーネスの相対パス問題）——コーパスと手動比較それぞれが実際に機能した実例。
+- **`guard_human_wip.py`**: 専用コーパスが無いため6ケースの手動比較で新旧完全一致を
+  確認。実測 約593ms/回→約230ms/回（2.6倍）。GUARDRAILS.md §2の保留トリガー
+  （このフックの改修発生）が本コミットで発火したことを明記——恒久コーパス化
+  （`check_guard_corpus.py --hook` 拡張）は次回以降の宿題として残す。
+- **未着手のまま残したもの**: `stop_incomplete_guard.sh`・`session_baseline.sh`・
+  `post_edit_format.sh`・`post_edit_lint.sh`（優先度が低いと判断——理由は
+  GUARDRAILS.md §10 Phase 33参照）。
+
 ## v2.22 での変更点（v2.21 からの是正。根拠は `GOALS.md` のG）
 
 導入先プロジェクト（Windows・32論理コア機）で `guard-corpus` フックが pre-commit
@@ -616,8 +638,8 @@ zip・展開元フォルダを自動削除する（残したい場合は `--keep
 ├── .claude/
 │   ├── settings.json                 … §2: フック配線 + permissions.deny（第二防壁）
 │   └── hooks/
-│       ├── guard_git_bypass.sh       … §2: 迂回（--no-verify / SKIP= 等）と非可逆な作業消失を exit 2 でブロック
-│       ├── guard_human_wip.sh        … §2c: 人間の未コミット変更への Edit/Write をブロック（v2.6・fail-open）
+│       ├── guard_git_bypass.py       … §2: 迂回（--no-verify / SKIP= 等）と非可逆な作業消失を exit 2 でブロック（v2.23でPython化）
+│       ├── guard_human_wip.py        … §2c: 人間の未コミット変更への Edit/Write をブロック（v2.6・fail-open。v2.23でPython化）
 │       ├── session_baseline.sh       … §2c: セッション開始時点の dirty パス集合を保存（v2.6）
 │       ├── post_edit_format.sh       … §1: 編集直後の整形（第1段・自動修正系）
 │       ├── post_edit_lint.sh         … §1: 編集直後の lint（第2段・判定系——v2.5）
@@ -726,7 +748,7 @@ pre-commit 導入 → 迂回防止 → commit-msg → push 段 → ログ出口 
   再実行する（忘れると新フックは静かに無効 — GUARDRAILS.md §0）。
 - `.claude/settings.json` の `permissions.deny` は**前方一致の第二防壁**。引数の順番を変えた
   迂回（例: `git commit -m "x" --no-verify`・`git push origin -f`）は主防壁の
-  `guard_git_bypass.sh` が引用符除去つきの全文走査で塞ぐ、という二重構造になっている。
+  `guard_git_bypass.py` が引用符除去つきの全文走査で塞ぐ、という二重構造になっている。
   guard は `--no-verify`/`-n`・`SKIP=` に加え、force push（`--force`/`-f`）・
   `core.hooksPath` の付け替え・`pre-commit uninstall`（フック本体の差し替え/取り外し＝
   全フック迂回）もブロックする。v2.5 からは**非可逆な作業消失**（`.git` を含む `rm -rf`＝

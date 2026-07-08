@@ -62,7 +62,7 @@ repos:
         entry: uv run scripts/check_guard_corpus.py
         language: system
         pass_filenames: false
-        files: ^(\.claude/hooks/guard_git_bypass\.sh|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
+        files: ^(\.claude/hooks/guard_git_bypass\.py|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
 
       # ---- §3.5 ブートストラップ監査（台帳 BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
       #      発火し、✅ の主張を再実行検証する。CI の --all-files では常時回る——二重の網）----
