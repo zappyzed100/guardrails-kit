@@ -28,6 +28,13 @@ block_loss() {
   exit 2
 }
 
+word_present() {
+  # \b相当（単語境界）の移植版。bash組み込みの [[ =~ ]] は MSYS2/Windows で \b が
+  # 拡張として効かない（GNU grepだけの拡張——実測で判明。v2.22）ため、POSIX標準クラス
+  # だけで「単語の前後が英数字/アンダースコア以外（または文字列端）」を組み立てる。
+  [[ $1 =~ (^|[^[:alnum:]_])($2)([^[:alnum:]_]|$) ]]
+}
+
 worktree_dirty_or_unknown() {
   # 未コミットの作業があるか。判定不能（git 不在・リポジトリ外）はブロック側に倒す
   # （fail-closed — §2）。クリーンなら 1 を返し、dirty 条件付き規則は素通しになる。
@@ -38,38 +45,49 @@ worktree_dirty_or_unknown() {
 
 if command -v jq >/dev/null 2>&1; then
   # --- 精密経路: コマンド文字列を抽出し、引用符の中身を除去してから判定 ---
+  # v2.22（G11・性能是正）: 判定は bash 組み込みの [[ =~ ]]／パターン展開へ置き換え、
+  # grep/tr の子プロセス生成を無くした（jq・sed の2個だけ残す——量が多いのはブール判定側で、
+  # そちらは組み込みで完全代替できる。sed の可変長「引用符の中身を全部消す」は組み込み
+  # パターン展開だけでは安全に再現しづらく、jq 同様そのまま残置）。実測: Windows 32コア機で
+  # 1回の呼び出しが約1000ms→約80msへ短縮（tests/guard_corpus.tsv 全74行で before/after
+  # 完全一致を確認 — GUARDRAILS.md §7.7）。
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
   [ -n "$cmd" ] || exit 0
-  stripped=$(printf '%s' "$cmd" | tr '\n' ' ' | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+  no_newlines=${cmd//$'\n'/ }
+  stripped=$(printf '%s' "$no_newlines" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 
   # 全フック迂回: core.hooksPath の付け替え（`git config core.hooksPath …`・`git -c core.hooksPath=…`）。
   # フック本体ごと差し替えれば --no-verify 検査は無意味になるため、git を含むコマンドでの
   # 言及自体をブロックする（キー名は git 仕様どおり大文字小文字非区別で判定・過剰ブロック側に倒す）。
-  if printf '%s' "$stripped" | grep -Eq '\bgit\b' && printf '%s' "$stripped" | grep -iq 'hookspath'; then
-    block 'core.hooksPath の変更（フック本体の付け替え）'
+  if word_present "$stripped" git; then
+    shopt -s nocasematch
+    hookspath_hit=0
+    [[ $stripped =~ hookspath ]] && hookspath_hit=1
+    shopt -u nocasematch
+    [[ $hookspath_hit -eq 1 ]] && block 'core.hooksPath の変更（フック本体の付け替え）'
   fi
 
   # 全フック迂回: pre-commit uninstall（シムの取り外し）。settings.json の deny は前方一致のみで
   # `cd x && pre-commit uninstall`・`uvx pre-commit uninstall`・`uv tool uninstall pre-commit` を
   # 通してしまう——引数順・経由の迂回を塞ぐのは主防壁の責務（--force と同じ二重構造）。
-  if printf '%s' "$stripped" | grep -Eq '\bpre-commit\b' && printf '%s' "$stripped" | grep -Eq '\buninstall\b'; then
+  if word_present "$stripped" pre-commit && word_present "$stripped" uninstall; then
     block 'pre-commit uninstall（フックシムの取り外し）'
   fi
 
-  if printf '%s' "$stripped" | grep -Eq '\bgit\b' && printf '%s' "$stripped" | grep -Eq '\b(commit|push)\b'; then
-    printf '%s' "$stripped" | grep -q -- '--no-verify' && block '--no-verify'
-    printf '%s' "$stripped" | grep -Eq '(^|[;&|[:space:]])SKIP=' && block 'SKIP='
+  if word_present "$stripped" git && word_present "$stripped" 'commit|push'; then
+    [[ $stripped == *--no-verify* ]] && block '--no-verify'
+    [[ $stripped =~ (^|[\;\&\|[:space:]])SKIP= ]] && block 'SKIP='
     # git commit の -n / 結合短フラグ内の n も --no-verify の別名
-    if printf '%s' "$stripped" | grep -Eq '\bcommit\b' \
-       && printf '%s' "$stripped" | grep -Eq '(^|[[:space:]])-[a-mo-zA-Z]*n[a-zA-Z]*([[:space:]]|$)'; then
+    if word_present "$stripped" commit \
+       && [[ $stripped =~ (^|[[:space:]])-[a-mo-zA-Z]*n[a-zA-Z]*([[:space:]]|$) ]]; then
       block '-n (--no-verify の別名)'
     fi
     # force push（--force / --force-with-lease / -f / 結合短フラグ内の f）。
     # settings.json の deny は前方一致のみで、引数順を変えた `git push origin -f` を
     # 通してしまう——引数順の迂回を塞ぐのは主防壁であるこのフックの責務（README の二重構造）。
-    if printf '%s' "$stripped" | grep -Eq '\bpush\b'; then
-      printf '%s' "$stripped" | grep -q -- '--force' && block '--force push（--force-with-lease 含む。履歴を書き換えない）'
-      if printf '%s' "$stripped" | grep -Eq '(^|[[:space:]])-[a-eg-zA-Z]*f[a-zA-Z]*([[:space:]]|$)'; then
+    if word_present "$stripped" push; then
+      [[ $stripped == *--force* ]] && block '--force push（--force-with-lease 含む。履歴を書き換えない）'
+      if [[ $stripped =~ (^|[[:space:]])-[a-eg-zA-Z]*f[a-zA-Z]*([[:space:]]|$) ]]; then
         block '-f (--force の別名)'
       fi
     fi
@@ -81,9 +99,9 @@ if command -v jq >/dev/null 2>&1; then
   #    近似——分離形 `rm -r -f` は §7.4「近似は仕様」の範囲外（実測されたらコーパスと
   #    同一コミットで還元する）。引用符で包んだ `.git` は stripped から消えるため、
   #    生コマンド側の引用付きトークンも併せて見る（過剰ブロック側に倒す — §2）。
-  if printf '%s' "$stripped" | grep -Eq '(^|[;&|[:space:]])rm[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])'; then
-    if printf '%s' "$stripped" | grep -Eq '(^|[[:space:]=/])\.git(/|[[:space:]]|$)' \
-       || printf '%s' "$cmd" | grep -Eq "[\"']\\.git(/|[\"'])"; then
+  if [[ $stripped =~ (^|[\;\&\|[:space:]])rm[[:space:]]([^\;\&\|]*[[:space:]])?-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR]) ]]; then
+    if [[ $stripped =~ (^|[[:space:]=/])\.git(/|[[:space:]]|$) ]] \
+       || [[ $cmd =~ [\"\'].git(/|[\"\']) ]]; then
       block_loss '.git を含む rm -rf（リポジトリ履歴の非可逆な破壊）は常時ブロック'
     fi
   fi
@@ -92,19 +110,21 @@ if command -v jq >/dev/null 2>&1; then
   #    広域判定の `.` は checkout/restore の**後**の単独トークンのみ（`git add .` 等の
   #    複合コマンドで誤検知しない）。`git restore --staged .` はインデックス操作のみで
   #    作業ツリーは無傷のため対象外（--worktree / -W を伴えば対象）。
-  if printf '%s' "$stripped" | grep -Eq '\bgit\b'; then
+  if word_present "$stripped" git; then
     wipe=''
-    if printf '%s' "$stripped" | grep -Eq '\breset\b' && printf '%s' "$stripped" | grep -q -- '--hard'; then
+    if word_present "$stripped" reset && [[ $stripped == *--hard* ]]; then
       wipe='git reset --hard'
-    elif printf '%s' "$stripped" | grep -Eq '\bclean\b' \
-         && { printf '%s' "$stripped" | grep -q -- '--force' \
-              || printf '%s' "$stripped" | grep -Eq '(^|[[:space:]])-[a-eg-zA-Z]*f[a-zA-Z]*([[:space:]]|$)'; }; then
+    elif word_present "$stripped" clean \
+         && { [[ $stripped == *--force* ]] \
+              || [[ $stripped =~ (^|[[:space:]])-[a-eg-zA-Z]*f[a-zA-Z]*([[:space:]]|$) ]]; }; then
       wipe='git clean -f'
-    elif printf '%s' "$stripped" | grep -Eq '\bcheckout\b[^;&|]*[[:space:]]\.([[:space:]]|$)'; then
+    elif word_present "$stripped" checkout \
+         && [[ $stripped =~ checkout[^\;\&\|]*[[:space:]]\.([[:space:]]|$) ]]; then
       wipe='広域の git checkout -- .'
-    elif printf '%s' "$stripped" | grep -Eq '\brestore\b[^;&|]*[[:space:]]\.([[:space:]]|$)'; then
-      if printf '%s' "$stripped" | grep -Eq -- '--staged|(^|[[:space:]])-[a-zA-Z]*S' \
-         && ! printf '%s' "$stripped" | grep -Eq -- '--worktree|(^|[[:space:]])-[a-zA-Z]*W'; then
+    elif word_present "$stripped" restore \
+         && [[ $stripped =~ restore[^\;\&\|]*[[:space:]]\.([[:space:]]|$) ]]; then
+      if [[ $stripped =~ --staged|(^|[[:space:]])-[a-zA-Z]*S ]] \
+         && [[ ! $stripped =~ --worktree|(^|[[:space:]])-[a-zA-Z]*W ]]; then
         wipe=''  # --staged のみ＝インデックス操作。作業ツリーの消失ではない
       else
         wipe='広域の git restore .'

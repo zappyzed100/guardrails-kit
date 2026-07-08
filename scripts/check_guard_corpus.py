@@ -29,8 +29,10 @@
 #     保守的経路は ALLOW 行（引用符内の --no-verify 等）を過剰ブロックするため、
 #     不在のまま走らせると偽の不一致になる——だから明示エラーで止める。
 #
-# 性能予算: コーパス全行で2秒以内（§7.7）。並列度は os.cpu_count() から自動導出
-# （v2.6 — 標準ライブラリで Windows 含め動くため、ユーザー入力も調査スクリプトも不要）。
+# 性能予算: コーパス全行で10秒以内（§7.7・v2.22で2秒→実測是正）。並列度は
+# os.cpu_count() から自動導出（v2.6 — 標準ライブラリで Windows 含め動くため、ユーザー
+# 入力も調査スクリプトも不要。上限は32→12に是正——Windows実機のベンチで8並列を境に
+# 頭打ちと判明・旧上限32は逆効果だった。guard 本体の起動回数削減とセットで§7.7参照）。
 
 from __future__ import annotations
 
@@ -183,15 +185,17 @@ def replay(bash: str, guard: Path, rows: list[tuple[int, str, str | None, str]])
             base = Path(tmp)
             fixtures["clean"] = make_fixture(base, dirty=False)
             fixtures["dirty"] = make_fixture(base, dirty=True)
-        # 行ごとに bash を1回起動するため、逐次では起動回数×数十msが積む。
-        # 行間に依存は無い（guard は無状態・フィクスチャは読み取りのみ）ので
-        # 並列に流して §7.7 の2秒予算に収める。
+        # 行ごとに bash を1回起動するため、逐次では起動回数×数百msが積む。
+        # 行間に依存は無い（guard は無状態・フィクスチャは読み取りのみ）ので並列に流す。
         # 並列度は実機のコア数から自動導出する（v2.6 — G11。os.cpu_count() は標準
         # ライブラリで Windows 含め動く＝ユーザー入力・調査スクリプトは不要）。
-        # スレッドの仕事はほぼ「子プロセス（bash+jq）待ち」なので物理コア数より多めが
-        # 有利——下限 8（少コア機でも待ち時間を重ねる）・目安 2×コア・上限 32
-        # （プロセス嵐と fork 負荷の抑止。予算超過の第一容疑者は常にプロセス起動回数 — §7.7）。
-        workers = min(32, max(8, 2 * (os.cpu_count() or 4)), len(rows))
+        # 下限8（少コア機でも待ち時間を重ねる）・上限12（v2.22で32→12に実測是正:
+        # 32コア機Windowsでベンチ実測した結果、8並列を境に頭打ち・24並列ではむしろ悪化
+        # （8→7.8s／16→8.3s／24→9.1s／32→8.3s——コア数比例ではなくbash/jqプロセス起動
+        # 自体の固定コストが律速のため「物理コア数より多めが有利」という旧前提が誤りだった。
+        # 過剰並列はpre-commitチェーン内の他フックとの競合を増やし、TIMEOUT_SEC個別超過の
+        # 誘因にもなる——予算超過の第一容疑者は常にプロセス起動回数 — §7.7）。
+        workers = min(12, max(8, 2 * (os.cpu_count() or 4)), len(rows))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             actuals = list(pool.map(
                 lambda r: run_guard(bash, guard, r[3], cwd=fixtures.get(r[2] or "")), rows))
