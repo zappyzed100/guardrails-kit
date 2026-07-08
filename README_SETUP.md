@@ -29,6 +29,19 @@
 | まっさらな新規リポジトリ | `PROMPT_claude_code.md` | 骨格を作り、ゲートを先に立て、違反ゼロから始める |
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 
+## v2.25 での変更点（非決定性テストの免除機構。根拠は `GOALS.md` のG）
+
+`test-sleep`/`test-nondeterminism`/`test-network` に免除経路を追加した回（正本:
+GUARDRAILS.md §9.5・§10 Phase 35）。実タイミング競合の再現テストのように、非決定性の
+再現そのものがテストの本質という正当なケースがあり、`NO-LOG:`（§8.4）・
+`RED-FIRST-EXEMPT:`（§5）と同型の「存在検査のみ・理由必須」境界を持つ
+`NONDETERMINISM-EXEMPT: 理由` コメントで免除できるようにした。
+
+- 免除は該当行の前後3行以内（`NONDETERMINISM_EXEMPT_WINDOW`・列上書き可）——3規則が
+  同一テストで同時に発火しうるため、単一のコメントでまとめて免除できる設計。
+- `test-calls-solver-direct` は対象外（既に別の免除経路を持つ）。
+- 詳細: `CUSTOMIZE.md` §5「個別の逃げ道」に追記。
+
 ## v2.24 での変更点（v2.23 からの完遂＋是正。根拠は `GOALS.md` のG）
 
 v2.23で見送った残り4フックの言語統一を完遂した回（正本: GUARDRAILS.md §10 Phase 34）。
