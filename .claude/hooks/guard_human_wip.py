@@ -25,6 +25,10 @@
 # （移行では解消しない無駄——同じ順序の弱点は bash 版にもあった）。baseline はローカルの
 # 静的ファイルなので、先にそちらを見て「該当の疑いがある時だけ」git を呼ぶ順序に変更。
 # baseline が空（セッション開始時クリーン）なら git を一切呼ばず即 exit 0 になる。
+#
+# v2.29（G7・session_baseline.py と対）: baseline ファイル先頭に `# source=<値> ts=<UTC>`
+# の1行メタデータが付くようになった（compact 誤爆事故の調査コスト削減——事故当時は
+# 生の transcript jsonl を読むしかなかった）。`#` 始まりの行はパス比較から除外する。
 
 from __future__ import annotations
 
@@ -102,9 +106,12 @@ def main() -> int:
             f"baseline が無い（SessionStart フック未発火か保存失敗: {session_id}.baseline）")
 
     try:
-        baseline_lines = baseline_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        raw_lines = baseline_file.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return warn_and_pass(f"baseline を読めない: {session_id}.baseline")
+    # `#` 始まりは v2.29 で追加されたメタデータ行（source/ts の診断用ヘッダー。
+    # session_baseline.py と対で改修 — §7.4）。パス比較の対象からは除外する。
+    baseline_lines = [ln for ln in raw_lines if ln and not ln.startswith("#")]
     if not baseline_lines:
         return 0  # セッション開始時点でクリーン＝守る対象が無い（git を呼ぶ必要が無い）
 

@@ -30,6 +30,12 @@
 # （現行バージョンでは実測確認済み——同一 session_id の transcript 内に isCompactSummary
 # レコードが存在。ハーネス側の将来変更でこれが崩れたら、上記フォールバックにより従来の
 # 誤検知が復活する——.guardrails/GUARDRAILS.md §2c 参照）。
+#
+# v2.29（G7・調査コスト削減）: 今回の事故調査は、生の transcript jsonl を直接読んで
+# 「いつ・どの source で baseline が書き換わったか」を突き止める必要があり手間だった。
+# 再発時に同じ手間を繰り返さないよう、baseline ファイルの先頭に `# source=<値>
+# ts=<UTC ISO8601>` のメタデータ行を1行だけ書く（guard_human_wip.py 側は `#` 始まりの
+# 行をパス比較から除外する——両フックを同一コミットで対にする、が §2c/§7.4 の流儀）。
 
 from __future__ import annotations
 
@@ -38,6 +44,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SESSION_ID_ALLOWED = re.compile(r"[^A-Za-z0-9._-]")
@@ -122,8 +129,12 @@ def main() -> int:
         else:
             lines.append(path)
 
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    source_label = str(payload.get("source") or "unknown").replace("\n", " ").replace("\r", " ")
+    header = f"# source={source_label} ts={ts}"
     try:
         with open(baseline_file, "w", encoding="utf-8", newline="\n") as f:
+            f.write(header + "\n")
             f.write("\n".join(lines) + ("\n" if lines else ""))
     except OSError:
         return warn_and_pass("baseline を書けない")
