@@ -124,6 +124,13 @@
 - def check_feat_test
 - def check_test_shrink
 - def check_commit_size
+- def main_single
+- def resolve_rev
+- def commits_in_range
+- def commit_message_text
+- class CommitWorktree
+- def check_commit
+- def main_history
 - def main
 
 ### `scripts/check_guard_corpus.py`

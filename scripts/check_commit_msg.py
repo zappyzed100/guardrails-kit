@@ -1,7 +1,16 @@
 # check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
 #
-# commit-msg ステージのフックとして pre-commit から呼ばれ、メッセージファイルのパスを
-# 引数1つで受け取る（§7.6: pass_filenames は既定 true のまま）。
+# 呼び出しは2形態:
+#   uv run scripts/check_commit_msg.py <メッセージファイル>
+#     commit-msg ステージのフックとして pre-commit から呼ばれる単発形態（§7.6: pass_filenames
+#     は既定 true のまま）。ステージ済みの索引（`git diff --cached`）を対象にする。
+#   uv run scripts/check_commit_msg.py --base <rev> [--head <rev>]
+#     v2.30 新設（G9・下記「commit-msg 系ゲートの CI 実効化」）。base..head の非マージ
+#     コミット1つずつを、そのコミットを今まさに作ろうとしている状態（一時 worktree で
+#     `git worktree add <sha>` → `git reset --soft <sha>^` により HEAD だけ親へ戻し、
+#     index/working tree はそのコミットのスナップショットのまま——「これから commit
+#     しようとしている」状態と同一の結果を返す）で再現し、単発形態と全く同じチェック
+#     関数を再実行する。コードの二重化はしない。
 #   exit 0 = 合格 / exit 1 = 違反 / exit 2 = 内部エラー
 #
 # 検査1（形式）: 件名が `^(feat|fix|test|docs|refactor|chore): .+` に一致すること。
@@ -32,10 +41,13 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,6 +55,7 @@ import repo_scan as rs  # noqa: E402
 
 SUBJECT_FORMAT = re.compile(r"^(feat|fix|test|docs|refactor|chore): .+")
 PASS_THROUGH_PREFIXES = ("Merge", "Revert", "fixup!", "squash!")
+HISTORY_TIMEOUT_SEC = 60  # 1コミットあたりの保険（ハングした再検査を静かに待たない — G11）
 
 # 検査6（feat-without-test — v2.13・Phase 25・**soft**＝警告のみで通す）:
 #   `feat:` でコードファイルに触れるのにテストファイルの変更が無ければ警告1行。
@@ -333,13 +346,8 @@ def check_commit_size(staged: list[str]) -> None:
               "（soft 警告・コミットは通る — .guardrails/GUARDRAILS.md §3.4 検査7）", file=sys.stderr)
 
 
-def main(argv: list[str]) -> int:
-    rs.reconfigure_stdio()
-    if len(argv) != 1:
-        print("usage: uv run scripts/check_commit_msg.py <コミットメッセージファイル>", file=sys.stderr)
-        return 2
-
-    subject = read_subject(argv[0])
+def main_single(msgfile: str) -> int:
+    subject = read_subject(msgfile)
     if subject.startswith(PASS_THROUGH_PREFIXES):
         return 0
     if not SUBJECT_FORMAT.match(subject):
@@ -364,7 +372,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     # 検査3: 正本3文書（GOALS / GUARDRAILS / catalog）の変更には G引用が必須（§3.4）
-    message_lines = read_message(argv[0])
+    message_lines = read_message(msgfile)
     touched = sorted(GOVERNANCE_PATHS.intersection(staged))
     if touched and not any(GOAL_CITATION.search(line) for line in message_lines):
         print("HARD:governance-without-goal (ステージ済み変更) "
@@ -385,6 +393,155 @@ def main(argv: list[str]) -> int:
     check_test_shrink(subject)
 
     return 1 if (dep_violations or plan_violations) else 0
+
+
+# ---- v2.30（G9）: commit-msg 系ゲートの CI 実効化 ----
+# `check-commit-msg` は stages:[commit-msg] のため、CI の `checks` ジョブが実行する
+# `pre-commit run --all-files`（--hook-stage 未指定）では走らない。ローカルで
+# `pre-commit install` していない限り、本ファイルの全検査が誰にも掛からない静かな穴
+# だった（実機で発見——.guardrails/GUARDRAILS.md §3.4 参照）。base..head の各コミットを
+# 一時 worktree で「今まさに作ろうとしている状態」に再現し、main_single() をそのまま
+# 再実行することで、単発形態と検査ロジックを1つも複製せずに埋める。
+
+
+def resolve_rev(root: Path, rev: str, role: str) -> str:
+    proc = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"],
+                          capture_output=True)
+    if proc.returncode != 0:
+        raise rs.ScanError(
+            f"{role} を解決できない: {rev!r}（例: --base origin/main。"
+            "CI では PR の base SHA を渡し、checkout は fetch-depth: 0 で全履歴を取る — §5 と同じ流儀）")
+    return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def commits_in_range(root: Path, base: str, head: str) -> list[str]:
+    """base..head の非マージコミット（古い順）。"""
+    proc = subprocess.run(["git", "-C", str(root), "rev-list", "--no-merges", "--reverse", f"{base}..{head}"],
+                          capture_output=True)
+    if proc.returncode != 0:
+        raise rs.ScanError(f"git rev-list が失敗: {proc.stderr.decode('utf-8', 'replace').strip()}")
+    return [s for s in proc.stdout.decode("utf-8", "replace").split() if s]
+
+
+def commit_message_text(root: Path, sha: str) -> str:
+    proc = subprocess.run(["git", "-C", str(root), "log", "-1", "--format=%B", sha], capture_output=True)
+    if proc.returncode != 0:
+        raise rs.ScanError(f"{sha[:7]} のメッセージを取得できない")
+    return proc.stdout.decode("utf-8", "replace")
+
+
+class CommitWorktree:
+    """コミット1つを「今まさに commit しようとしている状態」として再現する一時 worktree。
+
+    `git worktree add <sha>` で対象コミットへ checkout（HEAD=sha・index/working tree=sha
+    のスナップショット）した後 `reset --soft <sha>^` で HEAD だけ親へ戻す——index・working
+    tree はそのまま。main_single() 内の `git diff --cached` / `git show :path` /
+    `HEAD:path` 呼び出しは cwd 経由でこの worktree の git 状態を読むため、コード変更ゼロで
+    履歴上の任意のコミットを「ステージ済みの索引」として再検査できる（親の無い初回
+    コミットは `update-ref -d HEAD` で「まだ何もコミットしていない」状態を模す——
+    `check_dependencies` 等の `_head_exists()` 判定はこの状態を正しく「初回」と扱う）。
+    """
+
+    def __init__(self, root: Path, sha: str):
+        self.root = root
+        self.sha = sha
+        self.tmp: Path | None = None
+        self.path: Path | None = None
+
+    def __enter__(self) -> Path:
+        self.tmp = Path(tempfile.mkdtemp(prefix=".commit-msg-history-", dir=self.root))
+        self.path = self.tmp / "wt"
+        proc = subprocess.run(["git", "-C", str(self.root), "worktree", "add", "--detach",
+                               "--quiet", str(self.path), self.sha], capture_output=True)
+        if proc.returncode != 0:
+            raise rs.ScanError(
+                f"{self.sha[:7]} の worktree 作成に失敗: {proc.stderr.decode('utf-8', 'replace').strip()}")
+        has_parent = subprocess.run(
+            ["git", "-C", str(self.path), "rev-parse", "-q", "--verify", f"{self.sha}^"],
+            capture_output=True).returncode == 0
+        if has_parent:
+            subprocess.run(["git", "-C", str(self.path), "reset", "--soft", f"{self.sha}^"],
+                          capture_output=True, check=False)
+        else:
+            subprocess.run(["git", "-C", str(self.path), "update-ref", "-d", "HEAD"],
+                          capture_output=True, check=False)
+        return self.path
+
+    def __exit__(self, *_exc) -> None:
+        if self.path is not None:
+            subprocess.run(["git", "-C", str(self.root), "worktree", "remove", "--force", str(self.path)],
+                          capture_output=True, check=False)
+        if self.tmp is not None:
+            shutil.rmtree(self.tmp, ignore_errors=True)
+        subprocess.run(["git", "-C", str(self.root), "worktree", "prune"], capture_output=True, check=False)
+
+
+def check_commit(root: Path, checker_script: Path, sha: str) -> tuple[str, int, str]:
+    """1コミットを再検査する。戻り値は (件名, exit code, stderr全体)。"""
+    with CommitWorktree(root, sha) as wt:
+        msg_text = commit_message_text(root, sha)
+        msg_file = wt / ".commit-msg-history.txt"
+        msg_file.write_text(msg_text, encoding="utf-8", newline="\n")
+        try:
+            proc = subprocess.run([sys.executable, str(checker_script), str(msg_file)],
+                                  cwd=str(wt), capture_output=True, timeout=HISTORY_TIMEOUT_SEC)
+        except subprocess.TimeoutExpired:
+            raise rs.ScanError(f"{sha[:7]} の再検査が {HISTORY_TIMEOUT_SEC} 秒以内に返らない"
+                               "（ハングは赤の証明にならない — G11）")
+    subject = msg_text.splitlines()[0].strip() if msg_text.strip() else ""
+    return subject, proc.returncode, proc.stderr.decode("utf-8", "replace").strip()
+
+
+def main_history(base_arg: str, head_arg: str) -> int:
+    root = rs.repo_root()
+    checker_script = Path(__file__).resolve()
+    base = resolve_rev(root, base_arg, "--base")
+    head = resolve_rev(root, head_arg, "--head")
+    shas = commits_in_range(root, base, head)
+    if not shas:
+        print("[commit-msg-history] 対象コミット無し（base..head が空 — §3.4）")
+        return 0
+
+    violations = 0
+    for sha in shas:
+        short = sha[:7]
+        subject, rc, stderr_text = check_commit(root, checker_script, sha)
+        if rc == 0:
+            print(f"[commit-msg-history] {short} PASS: {subject!r}")
+            continue
+        if rc == 2:
+            raise rs.ScanError(f"{short} の再検査中に内部エラー: {stderr_text}")
+        violations += 1
+        first_line = stderr_text.splitlines()[0] if stderr_text else "(詳細不明)"
+        print(f"HARD:commit-msg-history-mismatch {short} {subject!r}: {first_line}", file=sys.stderr)
+
+    if violations:
+        print(f"\ncheck-commit-msg-history: 不一致 {violations} 件/{len(shas)} コミット。"
+              "各コミットの内容とメッセージ検査（.guardrails/GUARDRAILS.md §3.4）を揃える。",
+              file=sys.stderr)
+        return 1
+    print(f"[commit-msg-history] 全{len(shas)}コミット PASS")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    rs.reconfigure_stdio()
+    ap = argparse.ArgumentParser(
+        description="コミットメッセージ検査（.guardrails/GUARDRAILS.md §3.4）")
+    ap.add_argument("msgfile", nargs="?",
+                    help="コミットメッセージファイル（commit-msg フックからの単発呼び出し用）")
+    ap.add_argument("--base", help="このリビジョンから --head までの全コミットを履歴再検査する（CI用）")
+    ap.add_argument("--head", default="HEAD", help="履歴再検査の終点（既定: HEAD）")
+    args = ap.parse_args(argv)
+
+    if args.base is not None:
+        return main_history(args.base, args.head)
+
+    if args.msgfile is None:
+        print("usage: uv run scripts/check_commit_msg.py <コミットメッセージファイル> | --base <rev> [--head <rev>]",
+              file=sys.stderr)
+        return 2
+    return main_single(args.msgfile)
 
 
 if __name__ == "__main__":

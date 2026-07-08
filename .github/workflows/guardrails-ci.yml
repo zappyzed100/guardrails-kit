@@ -55,6 +55,24 @@ jobs:
       # ---------------------------------------------------------------------------------------
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
 
+  # commit-msg 系ゲートの CI 実効化（v2.30・G9）: `check-commit-msg` は stages:[commit-msg]
+  # のため、上の `checks` ジョブの `pre-commit run --all-files`（--hook-stage 未指定）では
+  # 実行されない——ローカルで `pre-commit install` していない限り、G引用・fix⇔テスト・
+  # 依存宣言・feat⇔plan の全 HARD 検査が誰にも掛からない静かな穴だった（実機で発見）。
+  # PR 範囲の各コミットを一時 worktree で「今まさに作ろうとしている状態」に再現し、
+  # commit-msg 単発形態と同じ検査ロジックをそのまま再実行する（BINDING 不要——git と
+  # python だけで完結。.guardrails/GUARDRAILS.md §3.4 参照）。
+  commit-msg-history:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15   # ハング保険（他ジョブと同じ — G11。1コミットの保険はスクリプト側 60 秒）
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（red-first と同じ理由 — §5）
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run scripts/check_commit_msg.py --base "${{ github.event.pull_request.base.sha }}"
+
   # ============ BINDING: 言語別テスト・解析・E2E ジョブ（.guardrails/GUARDRAILS.md §5・§12.4・§11 表A）============
   # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
   # paste-block（テスト/解析ジョブ・E2E ジョブ・ツールチェーン固定）をここへ貼る。
