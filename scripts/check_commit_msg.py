@@ -9,6 +9,10 @@
 # 検査2（fix ⇔ 回帰テストの対）: `fix:` のとき、ステージ済み変更にテストファイルが
 #   1つも無ければ exit 1。テストで再現できない修正は chore / refactor / docs を名乗る。
 #   ステージ済み変更が空（メッセージのみの --amend 等）は検査2〜4とも素通し（§3.4）。
+#   v2.30（G7・実測で是正）: `TEST_PATH_PATTERNS`（列充填）が空なら不発——検査5/6/7/8の
+#   兄弟検査は元から持っていたこのバイパスが検査2だけ抜けていた。列未選択のキット原本
+#   自身で「fix: コミットが原理上絶対に通らない」状態を放置していたことが実機で判明した
+#   （§3.4 参照）。
 # 検査4（undeclared-dependency — v2.5・Phase 13）: 依存マニフェスト（正本:
 #   repo_scan.DEPENDENCY_MANIFESTS——basename 一致）の依存セクションに HEAD と比べて
 #   **追加**された名前があるとき、その名前がメッセージに現れなければ exit 1。
@@ -351,7 +355,8 @@ def main(argv: list[str]) -> int:
         # 文言修正にはこの正規の逃げ道が必要（無いと文言修正が不可能になる）。
         return 0
 
-    if subject.startswith("fix:") and not any(rs.is_test_file(p) for p in staged):
+    if (subject.startswith("fix:") and rs.TEST_PATH_PATTERNS
+            and not any(rs.is_test_file(p) for p in staged)):
         print("HARD:fix-without-test (ステージ済み変更) "
               "fix: コミットに回帰テストの変更が1つも無い。テストを同梱するか、"
               "テストで再現できない修正なら chore/refactor/docs を名乗る（.guardrails/GUARDRAILS.md §3.4）",
