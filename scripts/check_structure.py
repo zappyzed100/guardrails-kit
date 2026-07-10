@@ -445,7 +445,8 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
             continue
         if counts[d] > rs.MAX_DIR_FILES:
             out.append(("SOFT", "dir-too-crowded", d or "(root)",
-                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— サブフォルダ化を検討"))
+                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— サブフォルダ化を検討"
+                        "（分割で作る新フォルダには CLAUDE.md の新設も検討する — AGENTS.md §13）"))
 
     # 役割一行ヘッダー
     for rel, text in texts.items():
