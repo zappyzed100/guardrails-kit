@@ -180,6 +180,7 @@
 - def check_context_doc_size
 - def check_hooks_installed
 - def check_binding_dead_patterns
+- def check_binding_dead_paths
 - def check_binding_source
 - def check_soft_limits
 - def check_orphans
@@ -217,6 +218,7 @@
 - def is_comment_line
 - def is_generated
 - def is_test_file
+- def is_ambient_declaration
 - def role_header
 - def role_header_problem
 - def public_symbols

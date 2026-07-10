@@ -362,6 +362,39 @@ def check_binding_dead_patterns(out: list[Finding]) -> None:
                         "（充填時に CODE_EXTS へ拡張子を足す — §3.3）"))
 
 
+def check_binding_dead_paths(files: list[str], tracked: set[str], out: list[Finding]) -> None:
+    """充填後のドリフト検査: パス/prefix 型バインディングが追跡ファイルに1件も一致しなければ
+    対応する検査は静かに不発＝fail-open（G9・§3.3）。binding-dead-pattern（hard）が充填時の
+    拡張子取りこぼしを見るのに対し、こちらは充填後のファイル移動・改名に値が追随していない
+    状態を見る。soft の理由: ブートストラップ途中（対象コードが未作成）の正当な一時状態と
+    区別できない——binding-unstamped と同じ「見える猶予」の整理。
+    """
+    dead: dict[str, None] = {}  # 挿入順を保つ重複排除（ORPHAN_UNIVERSES は prefix が重複し得る）
+    for rel in sorted(rs.LOG_EXIT_FILES):
+        if rel not in tracked:
+            dead[f"LOG_EXIT_FILES: {rel}"] = None
+    for pat in rs.FFI_BOUNDARY_FILE_PATTERNS:
+        if not any(pat.search(f) for f in files):
+            dead[f"FFI_BOUNDARY_FILE_PATTERNS: {pat.pattern}"] = None
+    for prefix, _pat, _desc in rs.LAYER_FORBIDDEN_IMPORTS:
+        if not any(f.startswith(prefix) for f in files):
+            dead[f"LAYER_FORBIDDEN_IMPORTS: {prefix}"] = None
+    for layer_root in rs.PLAN_LAYER_ROOTS:
+        prefix = layer_root.rstrip("/") + "/"
+        if not any(f.startswith(prefix) for f in files):
+            dead[f"PLAN_LAYER_ROOTS: {layer_root}"] = None
+    for prefixes, _ext, _entries in rs.ORPHAN_UNIVERSES:
+        for prefix in prefixes:
+            if not any(f.startswith(prefix) for f in files):
+                dead[f"ORPHAN_UNIVERSES: {prefix}"] = None
+    for item in dead:
+        out.append(("SOFT", "binding-dead-path", f"scripts/repo_scan.py ({item})",
+                    "パス/prefix が追跡ファイルに1件も一致せず、対応する検査が静かに不発"
+                    "（ファイル移動・改名に充填値が追随していない疑い。実パスへ更新し、"
+                    "同じパスを持つ他の設定（lint 設定・カタログの列）も同時に点検する — "
+                    ".guardrails/GUARDRAILS.md §3.3・G9）"))
+
+
 def check_binding_source(root: Path, tracked: set[str], out: list[Finding]) -> None:
     """バインディング刻印の整合（§12.7）。刻印は列ID@版・全対象ファイルで一致していること。
 
@@ -485,6 +518,7 @@ def main() -> int:
     check_context_doc_size(root, files, findings)
     check_hooks_installed(root, tracked, findings)
     check_binding_dead_patterns(findings)
+    check_binding_dead_paths(files, tracked, findings)
     check_binding_source(root, tracked, findings)
     check_soft_limits(files, texts, findings)
     check_orphans(root, files, texts, findings)
