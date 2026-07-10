@@ -423,7 +423,14 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
 - ✅ ファイル先頭の役割一行ヘッダー未記述・形式不正
 - ✅ `app/CLAUDE.md` ・ `engine/CLAUDE.md` の欠落
 - ✅ どこからも import/use・mod されない孤立ファイル（対象範囲・抽出器は採用列の
-  `ORPHAN_UNIVERSES` / `IMPORT_TARGET_EXTRACTORS` が定義。O(N²) 実装の禁止——§7.3）
+  `ORPHAN_UNIVERSES` / `IMPORT_TARGET_EXTRACTORS` が定義。O(N²) 実装の禁止——§7.3）。
+  ts-react-web 列の `_ts_import_targets` は元々 `^\s*(?:import|export)` で行頭アンカーして
+  おり、動的 `import()` が式として行の途中に来る形（例: `lazy(() => import("./X"))`）を
+  取りこぼしていた——Prettier が改行を入れるかどうか（変数名の長さ）という無関係な事情で
+  検出結果が変わっていた（v2.31・G7で是正——行頭アンカーとは別に非アンカーの動的 import
+  パターンを併用し、行中のどこにあっても拾う）。同時に `.d.ts` 環境宣言ファイル
+  （`is_ambient_declaration`）を対象範囲から除外——import されずに tsconfig の include
+  経由で自動的に効くファイルのため、孤立扱いにする母集団に含めるべきではなかった
 - ✅ `binding-unstamped` — バインディング刻印が未設定（Step 0 で採用列を刻印するまでの
   注意喚起 — §12.7）。刻印が**一部ファイルのみ**の状態は `HARD:binding-drift` になる
 - ✅ `hooks-not-installed` — pre-commit のシムが1つも無い（出荷直後〜Step 3 前の正常状態。

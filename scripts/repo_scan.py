@@ -119,6 +119,12 @@ def is_test_file(rel: str) -> bool:
     return any(p.search(rel) for p in TEST_PATH_PATTERNS)
 
 
+def is_ambient_declaration(rel: str) -> bool:
+    """TS の環境宣言ファイル（`declare global` 等）。import されずに tsconfig の
+    include 経由で自動的に効くため、import グラフ検査（孤立ファイル検出）の対象外。"""
+    return rel.endswith(".d.ts")
+
+
 def _first_meaningful_line(text: str) -> str | None:
     for line in text.splitlines():
         s = line.strip()
@@ -301,6 +307,9 @@ _TS_EXPORT_DECL = re.compile(
     r"(function|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)"
 )
 _TS_IMPORT = re.compile(r"""^\s*(?:import|export)[^'"]*['"]([^'"]+)['"]""")
+# 動的 import() は式なので行頭とは限らない（例: `lazy(() => import("./X"))`）。
+# 行頭アンカーの _TS_IMPORT だと、変数名が短くPrettierが改行しない場合に取りこぼす。
+_TS_DYNAMIC_IMPORT = re.compile(r"""\bimport\s*\(\s*['"]([^'"]+)['"]""")
 _TS_RESOLVE_EXTS = (".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx")
 
 
@@ -318,7 +327,7 @@ def _ts_import_targets(rel: str, text: str, _pkg_roots: dict[str, str]) -> set[s
     out: set[str] = set()
     base_dir = posixpath.dirname(rel)
     for line in text.splitlines():
-        m = _TS_IMPORT.match(line)
+        m = _TS_IMPORT.match(line) or _TS_DYNAMIC_IMPORT.search(line)
         if not m:
             continue
         target = m.group(1)
