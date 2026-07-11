@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -186,13 +187,96 @@ def assert_step_8b(root: Path, ctx: dict) -> list[str]:
     return []
 
 
+_GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
+
+
+def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
+    """gh api を1回呼ぶ。戻り値は (判定, 出力行)。判定 ∈ ok / absent(HTTP 404) / unverifiable。
+    404 は「対象が無いことの確定回答」（例: 旧来ブランチ保護が未設定）で、照会不能
+    （オフライン・未認証・権限不足）とは意味が違う——ここで区別しないと fail の向きを誤る。"""
+    try:
+        proc = subprocess.run([gh, "api", endpoint, "--jq", jq], cwd=root,
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return "unverifiable", []
+    if proc.returncode == 0:
+        return "ok", [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    if "404" in proc.stderr:
+        return "absent", []
+    return "unverifiable", []
+
+
+def verify_required_checks(root: Path) -> list[str]:
+    """Step 9 ④ の外部設定（required checks への `red-first` 登録）を実測検証する（v2.35）。
+
+    ローカルの門もリポジトリ内の CI 定義も、この設定だけは代替できない——required checks は
+    リポジトリ設定側にしか存在せず（§5・Phase 21「required の完成はリポジトリ設定まで」）、
+    従来の assert_step_9 はリポジトリ内のファイルしか見ないため、④ だけが監査の空白だった。
+
+    fail の向きは2段:
+    - **検証できて不在** → 失敗（✅ の主張と実体の不一致＝虚偽✅ — fail-closed）。
+    - **検証そのものが不能**（GitHub 以外のリモート・gh 不在・オフライン・未認証・権限不足）
+      → 表示して素通し（fail-open＋表示 — Stop ゲート §2b と同じ契約。検証不能の日に
+      ブートストラップを止めない。CI の再監査は checks ジョブの GH_TOKEN で認証される）。
+    照会はルールセット（/rules/branches——読み取り権限で可）と旧来ブランチ保護
+    （admin 権限が要る——403 は照会不能・404 は「保護なし」の確定回答）の両系統を見る。
+    """
+    url = rs.git_config_get(root, "remote.origin.url") or ""
+    m = _GITHUB_REMOTE_RE.search(url)
+    if not m:
+        print("[bootstrap] Step 9 ④: GitHub リモートが無いため required checks は検証対象外"
+              "（ホスティング側の同等設定を手動確認 — §3.5）", file=sys.stderr)
+        return []
+    gh = shutil.which("gh")
+    if gh is None:
+        print("[bootstrap] Step 9 ④: gh CLI 不在のため required checks を検証できない"
+              "（表示して素通し——gh を導入して再実行すれば検証が効く — §3.5）", file=sys.stderr)
+        return []
+    owner, repo = m.group(1), m.group(2)
+    status, lines = _gh_api(gh, root, f"repos/{owner}/{repo}", ".default_branch")
+    if status != "ok" or not lines:
+        print("[bootstrap] Step 9 ④: GitHub API に到達できず required checks を検証できない"
+              "（オフライン/未認証/権限不足——表示して素通し — §3.5）", file=sys.stderr)
+        return []
+    branch = lines[0]
+    contexts: set[str] = set()
+    verified = False
+    st, ls = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/rules/branches/{branch}",
+        '.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context')
+    if st == "ok":
+        verified = True
+        contexts |= set(ls)
+    st2, ls2 = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks",
+        ".contexts[]")
+    if st2 == "ok":
+        verified = True
+        contexts |= set(ls2)
+    elif st2 == "absent":
+        verified = True  # 旧来保護が「無い」ことの確定回答（照会不能とは区別する）
+    if not verified:
+        print("[bootstrap] Step 9 ④: required checks を照会できない（権限不足等——"
+              "表示して素通し — §3.5）", file=sys.stderr)
+        return []
+    if "red-first" not in contexts:
+        listed = ", ".join(sorted(contexts)) if contexts else "なし"
+        return [f"ブランチ保護/ルールセットの required checks に red-first が無い"
+                f"（{branch} の必須チェック実測: {listed}。リポジトリ設定で登録する——"
+                "required の完成はリポジトリ設定まで — §5・§11 Step 9 ④）"]
+    return []
+
+
 def assert_step_9(root: Path, ctx: dict) -> list[str]:
     ci = ".github/workflows/guardrails-ci.yml"
     text = rs.read_text(root, ci) if ci in ctx["tracked"] else ""
     jobs = set(re.findall(r"^  ([A-Za-z][\w-]*):\s*(?:#.*)?$", text, re.M))
+    fails = []
     if not jobs - {"checks", "red-first"}:
-        return ["CI に列のテスト/解析ジョブが無い（checks/red-first 以外ゼロ——近似判定 §7.4）"]
-    return []
+        fails.append("CI に列のテスト/解析ジョブが無い（checks/red-first 以外ゼロ——近似判定 §7.4）")
+    fails += verify_required_checks(root)  # ④ 外部設定の実測（v2.35）
+    return fails
 
 
 def assert_step_10(root: Path, ctx: dict) -> list[str]:

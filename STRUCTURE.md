@@ -14,6 +14,7 @@
 - `PROMPT_claude_code.md`
 - `PROMPT_claude_code_easy.md`
 - `PROMPT_claude_code_existing.md`
+- `PROMPT_codex.md`
 - `README.md`
 - `README_SETUP.md`
 
@@ -26,6 +27,11 @@
 - `.claude/hooks/session_baseline.py` — session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: .guardrails/GUARDRAILS.md §2c）
 - `.claude/hooks/stop_incomplete_guard.py` — stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: .guardrails/GUARDRAILS.md §2b）
 - `.claude/settings.json`
+
+## `.codex/`
+
+- `.codex/hooks.json`
+- `.codex/hooks/codex_hook_adapter.py` — codex_hook_adapter.py — Codex フックの入力を既存 guardrails フック契約へ正規化するアダプタ
 
 ## `.github/`
 
@@ -45,6 +51,7 @@
 ## `scripts/`
 
 - `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
+- `scripts/check_codex_hooks.py` — check_codex_hooks.py — Codex フック設定とアダプタの回帰検査（契約: .guardrails/GUARDRAILS.md §2）
 - `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
 - `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
 - `scripts/check_ownership_guard.py` — check_ownership_guard.py — 所有権ガード(§2c)の回帰シナリオ再生（契約: .guardrails/GUARDRAILS.md §2c）
@@ -102,6 +109,11 @@
 - def session_dir
 - def main
 
+### `.codex/hooks/codex_hook_adapter.py`
+- def project_root
+- def edited_paths
+- def main
+
 ### `scripts/check_bootstrap.py`
 - def parse_ledger
 - def head_ledger
@@ -115,8 +127,12 @@
 - def assert_step_7
 - def assert_step_8
 - def assert_step_8b
+- def verify_required_checks
 - def assert_step_9
 - def assert_step_10
+- def main
+
+### `scripts/check_codex_hooks.py`
 - def main
 
 ### `scripts/check_commit_msg.py`

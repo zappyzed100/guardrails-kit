@@ -26,6 +26,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15   # ハング保険（無限に待つ CI ＝最悪の出戻り — §9.1 の思想の CI 版・G11）
+    env:
+      GH_TOKEN: ${{ github.token }}   # check-bootstrap の Step 9 ④ 再監査（gh api——読み取りのみ §3.5・v2.35）
     steps:
       - uses: actions/checkout@v4
       # §7.1: Python 系はすべて uv 経由。Python 自体も .python-version に従い uv が自動解決
