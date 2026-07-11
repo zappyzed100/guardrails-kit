@@ -71,6 +71,12 @@ def resolve_root() -> str | None:
     return proc.stdout.decode("utf-8", "replace").strip()
 
 
+def session_dir(root: str) -> Path:
+    """ランタイム別の状態を置く。既定はClaude、Codexアダプタは .codex を明示する。"""
+    name = os.environ.get("GUARDRAILS_SESSION_DIR", ".claude")
+    return Path(root) / name / "session"
+
+
 def main() -> int:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
@@ -108,7 +114,7 @@ def main() -> int:
         return warn_and_pass("git status が失敗")
     porcelain = proc.stdout.decode("utf-8", "replace")
 
-    baseline_dir = Path(root) / ".claude" / "session"
+    baseline_dir = session_dir(root)
     baseline_file = baseline_dir / f"{session_id}.baseline"
     try:
         baseline_dir.mkdir(parents=True, exist_ok=True)

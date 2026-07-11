@@ -42,7 +42,8 @@ COMMANDS: dict[str, list[list[str]] | None] = {
     "test":  None,   # 単体テスト一式
     "e2e":   None,   # E2E（実UI貫通）テスト一式
     "fmt":   None,   # 整形（冪等）
-    "check": [["uv", "run", "scripts/check_structure.py"]],   # 構造検査（言語なしで即動く）
+    "check": [["uv", "run", "scripts/check_structure.py"],
+              ["uv", "run", "scripts/check_codex_hooks.py"]],  # 構造・Codexフック検査
     "probe": [["uv", "run", "scripts/check_guard_corpus.py", "--probe", "{args}"]],
              # ↑ 迂回防止の事前照会（言語なしで即動く — §2。「試して exit 2」の1周を削る）
     "db":    None,   # ローカルDBへの読み取りクエリ（例: dev.py db "select count(*) from x"）

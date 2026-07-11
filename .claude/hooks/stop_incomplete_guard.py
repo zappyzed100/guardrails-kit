@@ -52,6 +52,7 @@ MAX_REDIRECTS = 3
 TAIL_LINES = 50
 SESSION_ID_ALLOWED = re.compile(r"[^A-Za-z0-9._-]")
 HARD_LINE = re.compile(r"^HARD:", re.MULTILINE)
+CHECK_SCRIPTS = ("check_structure.py", "check_codex_hooks.py")
 
 
 def resolve_root() -> str | None:
@@ -66,6 +67,12 @@ def resolve_root() -> str | None:
     if proc.returncode != 0:
         return None
     return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def session_dir(root: str) -> Path:
+    """ランタイム別の状態を置く。既定はClaude、Codexアダプタは .codex を明示する。"""
+    name = os.environ.get("GUARDRAILS_SESSION_DIR", ".claude")
+    return Path(root) / name / "session"
 
 
 def main() -> int:
@@ -100,7 +107,7 @@ def main() -> int:
     transcript_path = payload.get("transcript_path") or ""
     active = bool(payload.get("stop_hook_active", False))
     session_id = SESSION_ID_ALLOWED.sub("", session_id_raw) or "unknown"
-    counter_dir = Path(root) / ".claude" / "session"
+    counter_dir = session_dir(root)
     counter_file = counter_dir / f"{session_id}.stopcount"
 
     # ---- 差し戻し理由の確定（出口1を含む） ----
@@ -109,21 +116,23 @@ def main() -> int:
     if porcelain.strip():
         reason = "dirty"
     else:
-        check_script = Path(root) / "scripts" / "check_structure.py"
-        if check_script.is_file():
+        check_scripts = [Path(root) / "scripts" / name for name in CHECK_SCRIPTS]
+        if all(path.is_file() for path in check_scripts):
             try:
-                check_proc = subprocess.run([sys.executable, str(check_script)],
-                                            capture_output=True, cwd=root, timeout=60)
-                check_out = (check_proc.stdout + check_proc.stderr).decode("utf-8", "replace")
-                if check_proc.returncode == 1 and HARD_LINE.search(check_out):
-                    reason = "check"
-                    hard_lines = [ln for ln in check_out.splitlines() if ln.startswith("HARD:")]
-                    check_head = "\n".join(hard_lines[:5])
+                for check_script in check_scripts:
+                    check_proc = subprocess.run([sys.executable, str(check_script)],
+                                                capture_output=True, cwd=root, timeout=60)
+                    check_out = (check_proc.stdout + check_proc.stderr).decode("utf-8", "replace")
+                    if check_proc.returncode == 1 and HARD_LINE.search(check_out):
+                        reason = "check"
+                        hard_lines = [ln for ln in check_out.splitlines() if ln.startswith("HARD:")]
+                        check_head = "\n".join(hard_lines[:5])
+                        break
                 # exit 0=緑 / exit 2=内部エラー / HARD 無しの非0 → いずれも差し戻さない
             except (OSError, subprocess.TimeoutExpired):
                 pass  # fail-open
         else:
-            print("[stop-gate] 条件B スキップ（scripts/check_structure.py が無い）——"
+            print("[stop-gate] 条件B スキップ（必須のキット検査スクリプトが無い）——"
                   "静かな不発の禁止は本表示で満たす（.guardrails/GUARDRAILS.md §2b）", file=sys.stderr)
         if not reason:
             try:

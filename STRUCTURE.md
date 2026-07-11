@@ -82,6 +82,7 @@
 - def warn_and_pass
 - def local_rel_candidate
 - def resolve_root
+- def session_dir
 - def main
 
 ### `.claude/hooks/post_edit_format.py`
@@ -93,10 +94,12 @@
 ### `.claude/hooks/session_baseline.py`
 - def warn_and_pass
 - def resolve_root
+- def session_dir
 - def main
 
 ### `.claude/hooks/stop_incomplete_guard.py`
 - def resolve_root
+- def session_dir
 - def main
 
 ### `scripts/check_bootstrap.py`
@@ -201,6 +204,7 @@
 - def lines_present
 - def precommit_ok
 - def settings_ok
+- def codex_hooks_ok
 - def git
 - def git_tracked_clean
 - def copy_file

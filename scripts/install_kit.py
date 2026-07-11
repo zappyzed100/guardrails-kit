@@ -60,6 +60,7 @@ GITIGNORE = ".gitignore"
 GITATTRIBUTES = ".gitattributes"
 PRECOMMIT = ".pre-commit-config.yaml"
 SETTINGS = ".claude/settings.json"
+CODEX_HOOKS = ".codex/hooks.json"
 GITIGNORE_BEGIN = "# >>> guardrails-kit >>>"
 # 旧版キットの痕跡（新パスへ移行済み。存在すれば NOTE で削除を促す——ブロックはしない）
 LEGACY_PATHS = [".github/workflows/ci.yml"]
@@ -109,6 +110,22 @@ def settings_ok(kit_file: Path, target_file: Path) -> bool:
             and "session_baseline.py" in dump and "guard_human_wip.py" in dump)
 
 
+def codex_hooks_ok(kit_file: Path, target_file: Path) -> bool:
+    try:
+        kit = json.loads(read_text(kit_file))
+        tgt = json.loads(read_text(target_file))
+    except (json.JSONDecodeError, OSError):
+        return False
+    required_events = {"PreToolUse", "PostToolUse", "SessionStart", "Stop"}
+    hooks = tgt.get("hooks", {})
+    if not required_events <= set(hooks):
+        return False
+    dump = json.dumps(tgt)
+    return ("codex_hook_adapter.py" in dump and "commandWindows" in dump
+            and "apply_patch" in dump and "CLAUDE_PROJECT_DIR" not in dump
+            and kit.get("hooks", {}).keys() <= hooks.keys())
+
+
 def git(target: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args], cwd=str(target), capture_output=True, text=True,
@@ -149,6 +166,9 @@ CONFLICT_HINTS = {
                + " / ".join(PRECOMMIT_REQUIRED) + "。統合後の再実行で KEPT になる）",
     SETTINGS: "permissions.deny の全エントリと PreToolUse/PostToolUse/Stop のフック配線（スクリプト4本。PostToolUse は整形→lint の直列1コマンド — §1）を既存 JSON へ"
               "マージする（既存エントリは消さない — 既存導入プロンプトの Step 4）",
+    CODEX_HOOKS: "Codex の hooks.json へ PreToolUse/PostToolUse/SessionStart/Stop を統合する"
+                 "（Codex は apply_patch を編集として送るため、codex_hook_adapter.py・commandWindows"
+                 "・Gitルート基準のコマンドを残す。既存フックは消さない）",
     GITATTRIBUTES: "キットの実効行（LF 固定）を既存へ追記する。gitattributes は後勝ちのため"
                    "既存の binary 指定等より上に `* text=auto eol=lf` を置く",
     GITIGNORE: "キット区画（>>> guardrails-kit >>> 〜 <<<）の中身が実効行ごと存在するよう"
@@ -253,6 +273,13 @@ def main() -> int:
                 results.append(("CONFLICT:merge-needed", rel, CONFLICT_HINTS[SETTINGS]))
                 conflicts = True
             continue
+        if rel == CODEX_HOOKS:
+            if codex_hooks_ok(src, dst):
+                results.append(("KEPT", rel, "Codex フック配線を包含済み"))
+            else:
+                results.append(("CONFLICT:merge-needed", rel, CONFLICT_HINTS[CODEX_HOOKS]))
+                conflicts = True
+            continue
 
         # --- 差分あり: 正本・スクリプト等（バイト管理）---
         if rel in FOREIGN_ALWAYS or not any(s in read_text(dst) for s in KIT_SIGNATURES):
@@ -290,6 +317,7 @@ def main() -> int:
         (GITATTRIBUTES, lambda: lines_present(kit_root / GITATTRIBUTES, target / GITATTRIBUTES)),
         (PRECOMMIT, lambda: precommit_ok(target / PRECOMMIT)),
         (SETTINGS, lambda: settings_ok(kit_root / SETTINGS, target / SETTINGS)),
+        (CODEX_HOOKS, lambda: codex_hooks_ok(kit_root / CODEX_HOOKS, target / CODEX_HOOKS)),
     ]
     if not args.dry_run:
         conflicted = {r for s, r, _ in results if s.startswith("CONFLICT")}

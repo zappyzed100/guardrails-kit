@@ -73,6 +73,13 @@ repos:
         pass_filenames: false
         files: ^(\.claude/hooks/session_baseline\.py|\.claude/hooks/guard_human_wip\.py|scripts/check_ownership_guard\.py)$
 
+      - id: codex-hooks
+        name: "codex-hooks (Codex フック設定・アダプタ回帰 — §2)"
+        entry: uv run scripts/check_codex_hooks.py
+        language: system
+        pass_filenames: false
+        files: ^(\.codex/hooks\.json|\.codex/hooks/|scripts/check_codex_hooks\.py)$
+
       # ---- §3.5 ブートストラップ監査（台帳 .guardrails/BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
       #      発火し、✅ の主張を再実行検証する。CI の --all-files では常時回る——二重の網）----
       - id: check-bootstrap

@@ -467,11 +467,13 @@ REQUIRED_PATHS = [
     ".claude/hooks/guard_git_bypass.py", ".claude/hooks/post_edit_format.py",
     ".claude/hooks/post_edit_lint.py", ".claude/hooks/stop_incomplete_guard.py",
     ".claude/hooks/session_baseline.py", ".claude/hooks/guard_human_wip.py",
+    ".codex/hooks.json", ".codex/hooks/codex_hook_adapter.py",
     ".github/workflows/guardrails-ci.yml",
     "scripts/repo_scan.py", "scripts/generate_structure.py",
     "scripts/check_structure.py", "scripts/check_commit_msg.py", "scripts/dev.py",
     "scripts/install_kit.py", "scripts/check_guard_corpus.py",
     "scripts/check_red_first.py", "scripts/check_bootstrap.py",
+    "scripts/check_codex_hooks.py",
     "tests/guard_corpus.tsv",
 ]
 
