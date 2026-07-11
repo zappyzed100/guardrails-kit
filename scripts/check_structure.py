@@ -395,6 +395,45 @@ def check_binding_dead_paths(files: list[str], tracked: set[str], out: list[Find
                     ".guardrails/GUARDRAILS.md §3.3・G9）"))
 
 
+_LOCAL_REPO_BLOCK_RE = re.compile(r"^  - repo: local\n((?:.*\n)*?)(?=^  - repo: |\Z)", re.M)
+_HOOK_ID_RE = re.compile(r"^      - id: ([\w-]+)", re.M)
+
+
+def check_installer_tokens(root: Path, tracked: set[str], out: list[Finding]) -> None:
+    """installer-token-drift（キット原本限定・hard — v2.38）: インストーラの検証条項が
+    キット自身の実体に追随しているか。
+
+    導入済みリポジトリの更新はインストーラ再実行だが、.pre-commit-config.yaml /
+    .claude/settings.json はトークン検証つきの KEPT（既存維持）——検証条項が古いままだと、
+    新版で増えたフックが**旧設定を KEPT のまま通して静かに届かない**（fail-open — G9。
+    実例: ownership-guard / codex-hooks が PRECOMMIT_REQUIRED から漏れたまま2版経過していた）。
+    導入先では列フックが混ざり「キットのフック」を機械判別できないため、原本側で堰き止める
+    （kit-source-exempt と対称の「原本限定」ゲート — §3.3）。
+    """
+    if not rs.is_kit_source_repo(tracked):
+        return
+    import install_kit  # 原本のみの遅延 import。定数を直接読む（正本の二重実装禁止 — §7.3）
+    cfg = rs.read_text(root, ".pre-commit-config.yaml") if ".pre-commit-config.yaml" in tracked else ""
+    m = _LOCAL_REPO_BLOCK_RE.search(cfg)
+    for hid in (_HOOK_ID_RE.findall(m.group(1)) if m else []):
+        if hid not in install_kit.PRECOMMIT_REQUIRED:
+            out.append(("HARD", "installer-token-drift",
+                        "scripts/install_kit.py (PRECOMMIT_REQUIRED)",
+                        f"ローカルフック {hid!r} が検証条項に無い——導入済みリポジトリの更新時、"
+                        "旧 .pre-commit-config.yaml が KEPT 判定のまま新フックが静かに届かない"
+                        "（同一コミットでトークンを足す — §3.3・G9）"))
+    ik_text = rs.read_text(root, "scripts/install_kit.py") if "scripts/install_kit.py" in tracked else ""
+    for rel in sorted(tracked):
+        if not (rel.startswith((".claude/hooks/", ".codex/hooks/")) and rel.endswith(".py")):
+            continue
+        base = rel.rsplit("/", 1)[-1]
+        if base not in ik_text:
+            out.append(("HARD", "installer-token-drift",
+                        "scripts/install_kit.py (settings_ok / codex_hooks_ok)",
+                        f"フック {base} が settings 系の検証条項に現れない——更新時に旧設定が"
+                        "KEPT のまま新フックの配線が静かに届かない（検証条項へ足す — §3.3・G9）"))
+
+
 def check_binding_source(root: Path, tracked: set[str], out: list[Finding]) -> None:
     """バインディング刻印の整合（§12.7）。刻印は列ID@版・全対象ファイルで一致していること。
 
@@ -520,6 +559,7 @@ def main() -> int:
     check_hooks_installed(root, tracked, findings)
     check_binding_dead_patterns(findings)
     check_binding_dead_paths(files, tracked, findings)
+    check_installer_tokens(root, tracked, findings)
     check_binding_source(root, tracked, findings)
     check_soft_limits(files, texts, findings)
     check_orphans(root, files, texts, findings)

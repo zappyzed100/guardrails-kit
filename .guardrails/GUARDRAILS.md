@@ -462,6 +462,13 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   迂回の静的検出。解除はユーザー端末で `git config --unset core.hooksPath` — §2 参照）
 - ✅ `binding-dead-pattern` — 充填したパターン辞書のキー拡張子が CODE_EXTS /
   HEADER_REQUIRED_EXTS に無く、その検査が永久に不発（列充填の取りこぼし＝fail-open の検出）
+- ✅ `installer-token-drift` — **キット原本限定**（v2.38・Phase 41）: インストーラの検証条項
+  （`PRECOMMIT_REQUIRED`・settings 系の判定文字列）がキット自身のローカルフック/フック
+  ファイルに追随していない。導入済みリポジトリの更新はインストーラ再実行だが、
+  .pre-commit-config.yaml / settings.json はトークン検証つき KEPT（既存維持）のため、
+  条項から漏れたフックは**旧設定を KEPT のまま通って静かに届かない**（fail-open — G9。
+  実例: ownership-guard / codex-hooks が2版の間漏れていた）。導入先では列フックが混ざり
+  キットのフックを機械判別できないため原本側で堰き止める（kit-source-exempt と対称）
 
 **soft（警告のみ・コミットは通る）**:
 - ✅ 1ファイル500行超

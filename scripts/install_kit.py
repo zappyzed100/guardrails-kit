@@ -65,10 +65,14 @@ GITIGNORE_BEGIN = "# >>> guardrails-kit >>>"
 # 旧版キットの痕跡（新パスへ移行済み。存在すれば NOTE で削除を促す——ブロックはしない）
 LEGACY_PATHS = [".github/workflows/ci.yml"]
 
-# .pre-commit-config.yaml が満たすべき検証条項（統合後の必須トークン — §3・§7.6）
+# .pre-commit-config.yaml が満たすべき検証条項（統合後の必須トークン — §3・§7.6）。
+# **キットのローカルフックを増やしたら同一コミットでここへ id を足す**——漏れると導入済み
+# リポジトリの更新時、旧設定が KEPT 判定のまま新フックが静かに届かない（fail-open — G9）。
+# 漏れ自体はキット原本の `installer-token-drift`（check-structure・hard）が機械検出する（§3.3）。
 PRECOMMIT_REQUIRED = [
     "gitleaks", "generate-structure", "check-structure", "check-commit-msg",
-    "guard-corpus", "check-bootstrap", "default_stages",
+    "guard-corpus", "ownership-guard", "codex-hooks", "check-bootstrap",
+    "bootstrap-verify-scenarios", "default_stages",
 ]
 
 
@@ -164,7 +168,9 @@ def append_gitignore_block(kit_file: Path, target_file: Path) -> None:
 CONFLICT_HINTS = {
     PRECOMMIT: "既存設定へキットの repos/hooks を統合する（必須トークン: "
                + " / ".join(PRECOMMIT_REQUIRED) + "。統合後の再実行で KEPT になる）",
-    SETTINGS: "permissions.deny の全エントリと PreToolUse/PostToolUse/Stop のフック配線（スクリプト4本。PostToolUse は整形→lint の直列1コマンド — §1）を既存 JSON へ"
+    SETTINGS: "permissions.deny の全エントリと PreToolUse（Bash・Edit|Write|MultiEdit）/"
+              "PostToolUse/Stop/SessionStart のフック配線（スクリプト6本。PostToolUse は"
+              "整形→lint の直列1コマンド — §1）を既存 JSON へ"
               "マージする（既存エントリは消さない — 既存導入プロンプトの Step 4）",
     CODEX_HOOKS: "Codex の hooks.json へ PreToolUse/PostToolUse/SessionStart/Stop を統合する"
                  "（Codex は apply_patch を編集として送るため、codex_hook_adapter.py・commandWindows"
@@ -182,6 +188,13 @@ DEFAULT_HINT_NOGIT = "git リポジトリではないため履歴の安全網が
 
 
 def main() -> int:
+    # §7.2: cp932 コンソール/パイプへの日本語出力で UnicodeEncodeError → exit 2 に化ける
+    # のを防ぐ（Windows で `install_kit.py | grep` 等に流した瞬間クラッシュする実測）
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     ap = argparse.ArgumentParser(description="ガードレール・キットの機械的インストーラ")
     ap.add_argument("--dry-run", action="store_true", help="書き込み・削除をせず判定のみ表示")
     ap.add_argument("--keep-source", action="store_true", help="成功時も zip・展開元を削除しない")

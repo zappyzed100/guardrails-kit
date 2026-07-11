@@ -202,6 +202,7 @@
 - def check_hooks_installed
 - def check_binding_dead_patterns
 - def check_binding_dead_paths
+- def check_installer_tokens
 - def check_binding_source
 - def check_soft_limits
 - def check_orphans
