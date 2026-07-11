@@ -241,30 +241,41 @@ def verify_required_checks(root: Path) -> list[str]:
         return []
     branch = lines[0]
     contexts: set[str] = set()
-    verified = False
     st, ls = _gh_api(
         gh, root, f"repos/{owner}/{repo}/rules/branches/{branch}",
         '.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context')
-    if st == "ok":
-        verified = True
+    rules_definitive = st == "ok"
+    if rules_definitive:
         contexts |= set(ls)
     st2, ls2 = _gh_api(
         gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks",
         ".contexts[]")
+    # 404 = 旧来保護が「無い」ことの確定回答（403/オフライン=照会不能とは意味が違う）
+    classic_definitive = st2 in ("ok", "absent")
     if st2 == "ok":
-        verified = True
         contexts |= set(ls2)
-    elif st2 == "absent":
-        verified = True  # 旧来保護が「無い」ことの確定回答（照会不能とは区別する）
-    if not verified:
-        print("[bootstrap] Step 9 ④: required checks を照会できない（権限不足等——"
-              "表示して素通し — §3.5）", file=sys.stderr)
+    if "red-first" in contexts:
+        # どちらか一方の系統で確認できれば登録の存在証明として十分
+        core_missing = [j for j in ("checks", "commit-msg-history") if j not in contexts]
+        if core_missing:
+            print(f"[bootstrap] Step 9 ④: required checks に {', '.join(core_missing)} が未登録"
+                  "（強制最低線は red-first のみ——親で赤の証明はこのジョブしか担わないため。"
+                  "全コアジョブの required 化を推奨・表示のみ — §3.5・§11 Step 9）", file=sys.stderr)
         return []
-    if "red-first" not in contexts:
+    if rules_definitive and classic_definitive:
+        # 不在の断定は両系統の確定回答が揃った時だけ（v2.36 是正——片系統が照会不能のまま
+        # 「検証できて不在」と誤断定すると、旧来保護だけに登録した採用先が CI で必ず偽赤になる:
+        # CI の GITHUB_TOKEN は旧来保護の照会が常に 403＝admin 必須のため）
         listed = ", ".join(sorted(contexts)) if contexts else "なし"
         return [f"ブランチ保護/ルールセットの required checks に red-first が無い"
                 f"（{branch} の必須チェック実測: {listed}。リポジトリ設定で登録する——"
                 "required の完成はリポジトリ設定まで — §5・§11 Step 9 ④）"]
+    unchecked = [name for name, d in (("ルールセット", rules_definitive),
+                                      ("旧来ブランチ保護", classic_definitive)) if not d]
+    print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、red-first の不在を"
+          "断定できない（照会できた範囲には無い——表示して素通し。CI の GITHUB_TOKEN は"
+          "旧来ブランチ保護を照会できない（admin 必須）ため、CI 再監査で確定判定を得るには"
+          "rulesets 側で登録する — §3.5）", file=sys.stderr)
     return []
 
 
@@ -277,6 +288,70 @@ def assert_step_9(root: Path, ctx: dict) -> list[str]:
         fails.append("CI に列のテスト/解析ジョブが無い（checks/red-first 以外ゼロ——近似判定 §7.4）")
     fails += verify_required_checks(root)  # ④ 外部設定の実測（v2.35）
     return fails
+
+
+def run_verify_scenarios() -> int:
+    """`--verify-scenarios`: verify_required_checks の回帰シナリオ再生（v2.36・§3.5）。
+
+    ネットワークに一切出ない（gh api・which・remote 照会を全部モックする）——
+    check_ownership_guard.py と同じ「門番自身の回帰」の型。発火は pre-commit の
+    `files: ^scripts/check_bootstrap\\.py$`（本体に触れた時だけ）＋ CI の --all-files。
+    シナリオ4は v2.36 で是正した偽陽性（rulesets 確定・空＋旧来保護 403 →
+    誤って「検証できて不在」）の再発防止が目的。
+    """
+    RULES = "rules/branches"
+    CLASSIC = "protection/required_status_checks"
+
+    def fake_api(responses: dict[str, tuple[str, list[str]]]):
+        def _fake(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
+            for key, resp in responses.items():
+                if key in endpoint:
+                    return resp
+            return responses.get("", ("ok", ["main"]))  # 既定: default_branch 照会は成功
+        return _fake
+
+    # (名前, 期待fail件数, remote, gh有無, _gh_api の応答表)
+    scenarios = [
+        ("rulesetsのみに登録（旧来保護は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("ok", ["red-first"]), CLASSIC: ("unverifiable", [])}),
+        ("旧来保護のみに登録（rulesets は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("unverifiable", []), CLASSIC: ("ok", ["red-first"])}),
+        ("両系統とも確定回答で不在 → 失敗", 1, "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("absent", [])}),
+        ("rulesets確定・空＋旧来保護は照会不能 → 断定せず素通し（v2.36 是正の回帰）", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("unverifiable", [])}),
+        ("両系統確定・旧来保護側に登録あり", 0, "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("ok", ["red-first", "checks"])}),
+        ("gh 不在 → 表示して素通し", 0, "git@github.com:o/r.git", False, {}),
+        ("GitHub 以外のリモート → 検証対象外", 0, "https://gitlab.com/o/r.git", True, {}),
+        ("API 到達不能（default_branch 照会失敗）→ 表示して素通し", 0,
+         "git@github.com:o/r.git", True, {"": ("unverifiable", [])}),
+    ]
+
+    this = sys.modules[__name__]
+    orig = (this._gh_api, shutil.which, rs.git_config_get)
+    mismatches = 0
+    t0 = time.monotonic()
+    try:
+        for name, want, remote, has_gh, responses in scenarios:
+            rs.git_config_get = lambda root, key, _u=remote: _u  # noqa: B023
+            shutil.which = (lambda n: "gh") if has_gh else (lambda n: None)
+            this._gh_api = fake_api(responses)
+            got = len(verify_required_checks(Path(".")))
+            if got != want:
+                mismatches += 1
+                print(f"HARD:step9-scenario-mismatch {name}: 期待fail {want} 件・実際 {got} 件"
+                      "（§3.5——本体とシナリオ期待値を同一コミットで揃える）", file=sys.stderr)
+    finally:
+        this._gh_api, shutil.which, rs.git_config_get = orig
+    if mismatches:
+        print(f"\ncheck-bootstrap --verify-scenarios: 不一致 {mismatches} 件/{len(scenarios)} 本",
+              file=sys.stderr)
+        return 1
+    print(f"[bootstrap] verify シナリオ 全{len(scenarios)}本 PASS "
+          f"(+{int((time.monotonic() - t0) * 1000)}ms)")
+    return 0
 
 
 def assert_step_10(root: Path, ctx: dict) -> list[str]:
@@ -375,6 +450,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        if "--verify-scenarios" in sys.argv[1:]:
+            rs.reconfigure_stdio()
+            sys.exit(run_verify_scenarios())
         sys.exit(main())
     except subprocess.TimeoutExpired as exc:
         print(f"check-bootstrap: 内部エラー: サブプロセスがタイムアウト: {exc.cmd}", file=sys.stderr)

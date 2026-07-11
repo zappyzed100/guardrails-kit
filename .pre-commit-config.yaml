@@ -89,6 +89,15 @@ repos:
         pass_filenames: false
         files: ^\.guardrails/BOOTSTRAP\.md$
 
+      # ---- §3.5 Step 9 ④ 検証の回帰シナリオ（全モック・ネットワーク不要。監査器本体に
+      #      触れた時だけ発火＝guard-corpus / ownership-guard と同じ「門番自身の回帰」の型 — v2.36）----
+      - id: bootstrap-verify-scenarios
+        name: "bootstrap-verify-scenarios (Step 9 ④ 検証の回帰 — §3.5)"
+        entry: uv run scripts/check_bootstrap.py --verify-scenarios
+        language: system
+        pass_filenames: false
+        files: ^scripts/check_bootstrap\.py$
+
       # ---- §3.4 コミットメッセージ検査（pass_filenames は既定 true のまま — §7.6 の注意）----
       - id: check-commit-msg
         name: "check-commit-msg (形式 + fix⇔テスト — §3.4)"

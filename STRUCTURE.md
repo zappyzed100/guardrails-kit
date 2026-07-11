@@ -129,6 +129,7 @@
 - def assert_step_8b
 - def verify_required_checks
 - def assert_step_9
+- def run_verify_scenarios
 - def assert_step_10
 - def main
 
