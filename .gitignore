@@ -10,4 +10,6 @@ __pycache__/
 .red-first-*/
 # commit-msg 系ゲートの履歴再検査の一時 worktree（§3.4。v2.30）
 .commit-msg-history-*/
+# 違反ログ（§3.6。v2.34。ローカル telemetry——追跡するとコミットノイズ＆機械記録の改変面）
+.guardrails/violations.jsonl
 # <<< guardrails-kit <<<

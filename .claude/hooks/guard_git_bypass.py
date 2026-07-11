@@ -28,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 
 def _word(w: str) -> re.Pattern[str]:
@@ -175,6 +176,30 @@ def check(cmd: str) -> None:
                        "クリーンなツリーなら素通しになる）")
 
 
+def record_block(rule_id: str, command: str) -> None:
+    """違反ログ（.guardrails/GUARDRAILS.md §3.6 — v2.34）への追記。
+
+    フックは依存ゼロ（標準ライブラリのみ・repo_scan を import しない）が前提のため、
+    repo_scan.append_violations と独立の最小実装を持つ（スキーマは同一——変えるときは
+    両方を同一コミットで揃える）。コーパス再生・probe（check_guard_corpus.py）は
+    GUARDRAILS_LEDGER_SUPPRESS=1 で抑止する——再生のたびに約40行の DENY 期待行が
+    「実際の迂回試行」として偽計上されるのを防ぐ。記録失敗は stderr 1行で素通し
+    （ブロック判定そのものには影響させない——fail-closed の契約は exit 2 側が担う）。
+    """
+    if os.environ.get("GUARDRAILS_LEDGER_SUPPRESS"):
+        return
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or "."
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    try:
+        with open(os.path.join(root, ".guardrails", "violations.jsonl"),
+                  "a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(
+                {"ts": ts, "stage": "guard", "severity": "DENY", "rule_id": rule_id,
+                 "location": command[:200]}, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"[violation-ledger] 記録失敗（ブロック判定には影響しない）: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
@@ -191,6 +216,7 @@ def main() -> int:
     try:
         check(cmd)
     except Block as b:
+        record_block("work-loss" if b.loss else "git-bypass", cmd)
         prefix = (
             f"ブロック: {b.reason}（.guardrails/GUARDRAILS.md §2 作業消失ガード）。消してよい変更なら"
             "先に commit / stash で退避するのが正規経路。人間の指示によるものなら、その旨を"

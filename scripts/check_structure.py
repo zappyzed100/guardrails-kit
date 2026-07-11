@@ -526,6 +526,7 @@ def main() -> int:
 
     for sev, rule, loc, msg in findings:
         print(f"{sev}:{rule} {loc} {msg}", file=sys.stderr)
+    rs.append_violations(root, "check-structure", findings)  # 違反ログ（§3.6）
 
     hard_count = sum(1 for f in findings if f[0] == "HARD")
     if hard_count:

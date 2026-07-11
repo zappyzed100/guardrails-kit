@@ -18,10 +18,12 @@
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -75,6 +77,32 @@ def read_text(root: Path, rel: str) -> str:
     """ファイル読み込みの唯一の入口。非UTF-8断片が混ざってもクラッシュしない（§7.2）。"""
     with open(root / rel, "r", encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+VIOLATION_LEDGER_REL = ".guardrails/violations.jsonl"
+
+
+def append_violations(root: Path, stage: str, findings) -> None:
+    """違反ログ（violation ledger — §3.6・v2.34）への追記。findings は
+    (severity, rule_id, location, …) の列。1違反1行の JSONL・gitignore 済みの
+    ローカル telemetry で、記録するのは第1層（事実）のみ——意味づけ・要約は書かない。
+
+    記録は門の**付帯機能**——書き込み失敗で門の判定（exit code）を変えない。
+    ただし黙って握りつぶさない（G9）: 失敗は stderr に1行出して素通しする。
+    """
+    rows = list(findings)
+    if not rows:
+        return
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    try:
+        with open(root / VIOLATION_LEDGER_REL, "a", encoding="utf-8", newline="\n") as f:
+            for sev, rule, loc, *_ in rows:
+                f.write(json.dumps(
+                    {"ts": ts, "stage": stage, "severity": sev, "rule_id": rule,
+                     "location": loc}, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"[violation-ledger] 記録失敗（門の判定には影響しない — "
+              f".guardrails/GUARDRAILS.md §3.6）: {exc}", file=sys.stderr)
 
 
 def git_config_get(root: Path, key: str) -> str | None:

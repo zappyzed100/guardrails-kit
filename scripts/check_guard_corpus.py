@@ -89,10 +89,15 @@ def run_guard(guard: Path, command: str, cwd: Path | None = None) -> tuple[str, 
     見つからず誤判定になる）。
     """
     payload = json.dumps({"tool_input": {"command": command}}, ensure_ascii=False)
-    env = None
+    # 違反ログ（§3.6）は常に抑止する——コーパス再生の DENY 期待行（約40行）と probe の
+    # 事前照会は「実際に門が止めた事象」ではない。抑止しないと再生のたびに偽の迂回試行が
+    # ledger へ積もり、頻度データ（soft→hard 昇格の実測）が計測不能になる。
     if cwd is not None:
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         env["CLAUDE_PROJECT_DIR"] = str(cwd)
+    else:
+        env = dict(os.environ)
+    env["GUARDRAILS_LEDGER_SUPPRESS"] = "1"
     try:
         proc = subprocess.run(
             [sys.executable, str(guard)],

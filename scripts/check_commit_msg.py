@@ -77,6 +77,18 @@ GOVERNANCE_PATHS = frozenset({".guardrails/GOALS.md", ".guardrails/GUARDRAILS.md
 GOAL_CITATION = re.compile(r"\bG(1[0-4]|[1-9])\b")  # G14 新設と同時改修（v2.8・§10 Phase 19）
 _SCISSORS = ">8"  # `git commit -v` の切り取り線以降（diff本体）は本文ではない
 
+# 違反ログ（§3.6 — v2.34）: 単発形態の違反を集めて main() が最後に1回で追記する。
+# 履歴再検査（main_history）は記録しない——各コミットの再実行は一時 worktree 内で走り、
+# その中の repo_root() は worktree を指すため、ledger ごと worktree と一緒に破棄される
+# （過去コミットの再生を「新しい違反事象」として二重計上しない境界が構造的に成立する）。
+_VIOLATIONS: list[tuple[str, str, str, str]] = []
+
+
+def _emit(severity: str, rule_id: str, location: str, message: str) -> None:
+    """1違反1行の表示（§3.3 形式）と違反ログ用バッファへの追加を1箇所にする。"""
+    print(f"{severity}:{rule_id} ({location}) {message}", file=sys.stderr)
+    _VIOLATIONS.append((severity, rule_id, location, message))
+
 
 def read_message(msg_path: str) -> list[str]:
     """コメント行を除いた本文行。切り取り線（-v の diff）以降は読まない。"""
@@ -246,10 +258,10 @@ def check_dependencies(staged: list[str], message_lines: list[str]) -> int:
         for name in sorted(n for n in new_names if _norm_dep(n) not in old_norm):
             if name.lower() not in message_l:
                 violations += 1
-                print(f"HARD:undeclared-dependency ({rel}) 依存追加 {name!r} が"
-                      "メッセージで宣言されていない。本文に "
+                _emit("HARD", "undeclared-dependency", rel,
+                      f"依存追加 {name!r} がメッセージで宣言されていない。本文に "
                       f"`依存追加: {name} — 理由1行` を書く（依存は増えてよいが、"
-                      "黙って増えてはならない — .guardrails/GUARDRAILS.md §3.4 検査4）", file=sys.stderr)
+                      "黙って増えてはならない — .guardrails/GUARDRAILS.md §3.4 検査4）")
     return violations
 
 
@@ -279,11 +291,12 @@ def check_feat_plan(subject: str, staged: list[str]) -> int:
         )
         if proc.returncode != 0:  # HEAD にそのツリーが無い = 新規ディレクトリ
             violations += 1
-            print(f"HARD:feat-without-plan ({d}/) レイヤー直下に新規ディレクトリを作る "
+            _emit("HARD", "feat-without-plan", f"{d}/",
+                  "レイヤー直下に新規ディレクトリを作る "
                   "feat: に設計根拠文書（plan.md / docs/plans/ — AGENTS.md §4）の差分が無い。"
                   "根拠（1行でよい）を書いて同コミットへ含めるか、根拠を書けない構造変更なら "
                   "feat を名乗らない（意図の複利は fix⇔テスト G10 と対 — G14・"
-                  ".guardrails/GUARDRAILS.md §3.4 検査5）", file=sys.stderr)
+                  ".guardrails/GUARDRAILS.md §3.4 検査5）")
     return violations
 
 
@@ -294,10 +307,10 @@ def check_feat_test(subject: str, staged: list[str]) -> None:
     code_touched = any(rs.ext_of(p) in rs.CODE_EXTS and not rs.is_test_file(p)
                        and not rs.is_generated(p) for p in staged)
     if code_touched and not any(rs.is_test_file(p) for p in staged):
-        print("SOFT:feat-without-test (ステージ済み変更) "
+        _emit("SOFT", "feat-without-test", "ステージ済み変更",
               "feat: がコードに触れるのにテストの変更が無い（新機能もテストを同梱する"
               "——soft 警告・コミットは通る。契約と昇格条件は .guardrails/GUARDRAILS.md §3.4 検査6・"
-              "§10 Phase 25。AGENTS.md §8）", file=sys.stderr)
+              "§10 Phase 25。AGENTS.md §8）")
 
 
 def check_test_shrink(subject: str) -> None:
@@ -317,10 +330,11 @@ def check_test_shrink(subject: str) -> None:
             added += int(parts[0])
             removed += int(parts[1])
     if removed > added:
-        print(f"SOFT:test-shrink (ステージ済み変更) テストファイルが純減している"
+        _emit("SOFT", "test-shrink", "ステージ済み変更",
+              f"テストファイルが純減している"
               f"（追加 {added} 行 < 削除 {removed} 行）。既存テストの弱体化は門を欺く最短路"
               "（assertion の削除で緑にしていないか——正当な整理なら無視してよい・soft — "
-              ".guardrails/GUARDRAILS.md §3.4 検査8・調査④）", file=sys.stderr)
+              ".guardrails/GUARDRAILS.md §3.4 検査8・調査④）")
 
 
 def check_commit_size(staged: list[str]) -> None:
@@ -340,10 +354,11 @@ def check_commit_size(staged: list[str]) -> None:
             continue
         total += int(parts[0]) + int(parts[1])
     if total > rs.COMMIT_SIZE_SOFT_LIMIT:
-        print(f"SOFT:commit-too-large (ステージ済み変更) 純変更 {total} 行 > "
+        _emit("SOFT", "commit-too-large", "ステージ済み変更",
+              f"純変更 {total} 行 > "
               f"上限 {rs.COMMIT_SIZE_SOFT_LIMIT} 行（生成物・lockfile 除外済み）。"
               "小さく分ける——大きな塊はどのゲートが何を検証したか追えない"
-              "（soft 警告・コミットは通る — .guardrails/GUARDRAILS.md §3.4 検査7）", file=sys.stderr)
+              "（soft 警告・コミットは通る — .guardrails/GUARDRAILS.md §3.4 検査7）")
 
 
 def main_single(msgfile: str) -> int:
@@ -351,9 +366,9 @@ def main_single(msgfile: str) -> int:
     if subject.startswith(PASS_THROUGH_PREFIXES):
         return 0
     if not SUBJECT_FORMAT.match(subject):
-        print("HARD:commit-msg-format (件名) "
+        _emit("HARD", "commit-msg-format", "件名",
               "`^(feat|fix|test|docs|refactor|chore): .+` に一致しない: "
-              f"{subject!r}（規約の正本: ルート AGENTS.md §10）", file=sys.stderr)
+              f"{subject!r}（規約の正本: ルート AGENTS.md §10）")
         return 1
 
     staged = staged_files()
@@ -365,20 +380,19 @@ def main_single(msgfile: str) -> int:
 
     if (subject.startswith("fix:") and rs.TEST_PATH_PATTERNS
             and not any(rs.is_test_file(p) for p in staged)):
-        print("HARD:fix-without-test (ステージ済み変更) "
+        _emit("HARD", "fix-without-test", "ステージ済み変更",
               "fix: コミットに回帰テストの変更が1つも無い。テストを同梱するか、"
-              "テストで再現できない修正なら chore/refactor/docs を名乗る（.guardrails/GUARDRAILS.md §3.4）",
-              file=sys.stderr)
+              "テストで再現できない修正なら chore/refactor/docs を名乗る（.guardrails/GUARDRAILS.md §3.4）")
         return 1
 
     # 検査3: 正本3文書（GOALS / GUARDRAILS / catalog）の変更には G引用が必須（§3.4）
     message_lines = read_message(msgfile)
     touched = sorted(GOVERNANCE_PATHS.intersection(staged))
     if touched and not any(GOAL_CITATION.search(line) for line in message_lines):
-        print("HARD:governance-without-goal (ステージ済み変更) "
+        _emit("HARD", "governance-without-goal", "ステージ済み変更",
               f"{', '.join(touched)} を変更するのに、メッセージに効くGの引用が無い"
               "（例: `docs: §3.3 に規則追加（G4）`。どのGにも効かない変更は入れない"
-              " — .guardrails/GOALS.md 運用ルール・.guardrails/GUARDRAILS.md §3.4）", file=sys.stderr)
+              " — .guardrails/GOALS.md 運用ルール・.guardrails/GUARDRAILS.md §3.4）")
         return 1
 
     # 検査4: 依存マニフェストへの追加はメッセージで宣言する（undeclared-dependency — §3.4）
@@ -541,7 +555,9 @@ def main(argv: list[str]) -> int:
         print("usage: uv run scripts/check_commit_msg.py <コミットメッセージファイル> | --base <rev> [--head <rev>]",
               file=sys.stderr)
         return 2
-    return main_single(args.msgfile)
+    rc = main_single(args.msgfile)
+    rs.append_violations(rs.repo_root(), "commit-msg", _VIOLATIONS)  # 違反ログ（§3.6）
+    return rc
 
 
 if __name__ == "__main__":

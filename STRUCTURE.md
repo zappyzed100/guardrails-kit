@@ -75,6 +75,7 @@
 - def block_loss
 - def worktree_dirty_or_unknown
 - def check
+- def record_block
 - def main
 
 ### `.claude/hooks/guard_human_wip.py`
@@ -212,6 +213,7 @@
 - def repo_root
 - def list_tracked_files
 - def read_text
+- def append_violations
 - def git_config_get
 - def git_hooks_dir
 - def ext_of
