@@ -189,6 +189,12 @@ def assert_step_8b(root: Path, ctx: dict) -> list[str]:
 
 _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
 
+# Step 9 ④ の強制最低線（v2.37——3コアジョブ）。red-first だけでは、ローカルフックが
+# 動かない経路（Web 編集・フック未導入マシン——§5 が CI を最終防衛線とする理由そのもの）で
+# checks / commit-msg-history の赤をマージから止められない。列固有のテスト/E2E ジョブは
+# 名前が列依存のため最低線に含めない（required 化は推奨・§11 Step 9）。
+REQUIRED_CHECK_CONTEXTS = ("checks", "red-first", "commit-msg-history")
+
 
 def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
     """gh api を1回呼ぶ。戻り値は (判定, 出力行)。判定 ∈ ok / absent(HTTP 404) / unverifiable。
@@ -254,28 +260,27 @@ def verify_required_checks(root: Path) -> list[str]:
     classic_definitive = st2 in ("ok", "absent")
     if st2 == "ok":
         contexts |= set(ls2)
-    if "red-first" in contexts:
-        # どちらか一方の系統で確認できれば登録の存在証明として十分
-        core_missing = [j for j in ("checks", "commit-msg-history") if j not in contexts]
-        if core_missing:
-            print(f"[bootstrap] Step 9 ④: required checks に {', '.join(core_missing)} が未登録"
-                  "（強制最低線は red-first のみ——親で赤の証明はこのジョブしか担わないため。"
-                  "全コアジョブの required 化を推奨・表示のみ — §3.5・§11 Step 9）", file=sys.stderr)
-        return []
+    # 最低線は3コアジョブ（v2.37）。「checks / commit-msg-history はローカルでも走るから
+    # 重複」はローカルフックが動く経路にしか成立しない——CI を最終防衛線とする主張
+    # （§5・README）の対象経路（Web 編集・フック未導入マシン）では、この2ジョブが唯一の
+    # 強制点で、required でなければ赤のままマージできる。
+    missing = [j for j in REQUIRED_CHECK_CONTEXTS if j not in contexts]
+    if not missing:
+        return []  # 各ジョブはどちらか一方の系統で確認できれば存在証明として十分
     if rules_definitive and classic_definitive:
         # 不在の断定は両系統の確定回答が揃った時だけ（v2.36 是正——片系統が照会不能のまま
         # 「検証できて不在」と誤断定すると、旧来保護だけに登録した採用先が CI で必ず偽赤になる:
         # CI の GITHUB_TOKEN は旧来保護の照会が常に 403＝admin 必須のため）
         listed = ", ".join(sorted(contexts)) if contexts else "なし"
-        return [f"ブランチ保護/ルールセットの required checks に red-first が無い"
+        return [f"required checks にコアジョブが不足: {', '.join(missing)}"
                 f"（{branch} の必須チェック実測: {listed}。リポジトリ設定で登録する——"
                 "required の完成はリポジトリ設定まで — §5・§11 Step 9 ④）"]
     unchecked = [name for name, d in (("ルールセット", rules_definitive),
                                       ("旧来ブランチ保護", classic_definitive)) if not d]
-    print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、red-first の不在を"
-          "断定できない（照会できた範囲には無い——表示して素通し。CI の GITHUB_TOKEN は"
-          "旧来ブランチ保護を照会できない（admin 必須）ため、CI 再監査で確定判定を得るには"
-          "rulesets 側で登録する — §3.5）", file=sys.stderr)
+    print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、コアジョブ"
+          f"（{', '.join(missing)}）の不在を断定できない（照会できた範囲には無い——表示して"
+          "素通し。CI の GITHUB_TOKEN は旧来ブランチ保護を照会できない（admin 必須）ため、"
+          "CI 再監査で確定判定を得るには rulesets 側で登録する — §3.5）", file=sys.stderr)
     return []
 
 
@@ -310,19 +315,27 @@ def run_verify_scenarios() -> int:
             return responses.get("", ("ok", ["main"]))  # 既定: default_branch 照会は成功
         return _fake
 
+    ALL3 = list(REQUIRED_CHECK_CONTEXTS)
     # (名前, 期待fail件数, remote, gh有無, _gh_api の応答表)
     scenarios = [
-        ("rulesetsのみに登録（旧来保護は照会不能）", 0, "git@github.com:o/r.git", True,
-         {RULES: ("ok", ["red-first"]), CLASSIC: ("unverifiable", [])}),
-        ("旧来保護のみに登録（rulesets は照会不能）", 0, "git@github.com:o/r.git", True,
-         {RULES: ("unverifiable", []), CLASSIC: ("ok", ["red-first"])}),
-        ("両系統とも確定回答で不在 → 失敗", 1, "git@github.com:o/r.git", True,
+        ("rulesetsのみに3コアジョブ登録（旧来保護は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("ok", ALL3), CLASSIC: ("unverifiable", [])}),
+        ("旧来保護のみに3コアジョブ登録（rulesets は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("unverifiable", []), CLASSIC: ("ok", ALL3)}),
+        ("両系統とも確定回答で全部不在 → 失敗", 1, "git@github.com:o/r.git", True,
          {RULES: ("ok", []), CLASSIC: ("absent", [])}),
         ("rulesets確定・空＋旧来保護は照会不能 → 断定せず素通し（v2.36 是正の回帰）", 0,
          "git@github.com:o/r.git", True,
          {RULES: ("ok", []), CLASSIC: ("unverifiable", [])}),
-        ("両系統確定・旧来保護側に登録あり", 0, "git@github.com:o/r.git", True,
+        ("両系統確定・red-first と checks のみ → 最低線3ジョブに不足で失敗（v2.37 の回帰）", 1,
+         "git@github.com:o/r.git", True,
          {RULES: ("ok", []), CLASSIC: ("ok", ["red-first", "checks"])}),
+        ("2系統に分かれて合計3コアジョブ（存在証明は系統横断の和集合）", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", ["red-first"]), CLASSIC: ("ok", ["checks", "commit-msg-history"])}),
+        ("red-first のみ確認・旧来保護は照会不能 → 残り2つの不在を断定せず素通し", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", ["red-first"]), CLASSIC: ("unverifiable", [])}),
         ("gh 不在 → 表示して素通し", 0, "git@github.com:o/r.git", False, {}),
         ("GitHub 以外のリモート → 検証対象外", 0, "https://gitlab.com/o/r.git", True, {}),
         ("API 到達不能（default_branch 照会失敗）→ 表示して素通し", 0,
