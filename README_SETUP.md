@@ -28,6 +28,7 @@
 |---|---|---|
 | まっさらな新規リポジトリ | `PROMPT_claude_code.md` | 骨格を作り、ゲートを先に立て、違反ゼロから始める |
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
+| 導入済みリポジトリの新版更新 | `PROMPT_claude_code_update.md` | インストーラ再実行（UPGRADED——git 履歴が安全網）→ 消えた充填を履歴から復元 → §10 の Phase 見出し diff で新しい門を列挙 → 門ごとに違反注入 DoD |
 
 ## v2.25 での変更点（非決定性テストの免除機構。根拠は `.guardrails/GOALS.md` のG）
 
