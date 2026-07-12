@@ -22,6 +22,12 @@
 #   兄弟検査は元から持っていたこのバイパスが検査2だけ抜けていた。列未選択のキット原本
 #   自身で「fix: コミットが原理上絶対に通らない」状態を放置していたことが実機で判明した
 #   （§3.4 参照）。
+#   v2.39（G10・採用先の実測で是正）: テスト同梱の判定を「パス一致（TEST_PATH_PATTERNS）
+#   **または** ステージ済み diff の追加行一致（INLINE_TEST_PATTERNS——同一ファイル内
+#   `#[cfg(test)]` 形式の言語向け）」の OR へ拡張（検査6も同じ判定を使う）。パス判別のみ
+#   だと、インライン形式のファイル単独の fix: が実際にテストを同梱していても誤ブロック
+#   される（採用先 Rust リポジトリで実測——テストと生成器をペア修正する限り生成器側の
+#   パスが偶然一致して顕在化しなかった）。発火条件も「どちらかのスロットが充填済み」へ拡張。
 # 検査4（undeclared-dependency — v2.5・Phase 13）: 依存マニフェスト（正本:
 #   repo_scan.DEPENDENCY_MANIFESTS——basename 一致）の依存セクションに HEAD と比べて
 #   **追加**された名前があるとき、その名前がメッセージに現れなければ exit 1。
@@ -117,6 +123,37 @@ def staged_files() -> list[str]:
     if proc.returncode != 0:
         raise rs.ScanError("git diff --cached が失敗")
     return [p for p in proc.stdout.decode("utf-8", "replace").split("\0") if p]
+
+
+def _staged_has_inline_test(staged: list[str]) -> bool:
+    """インライン形式（同一ファイル内 `#[cfg(test)]` 等——rs.INLINE_TEST_PATTERNS）の
+    テスト同梱を、ステージ済み diff の**追加行**から検出する（v2.39・§3.4 検査2/6）。
+    パス判別（rs.is_test_file）と OR で使う。diff の quoted path 等は近似で扱う（§7.4）。"""
+    targets = [p for p in staged
+               if rs.ext_of(p) in rs.INLINE_TEST_PATTERNS and not rs.is_generated(p)]
+    if not targets:
+        return False
+    proc = subprocess.run(["git", "diff", "--cached", "--unified=0", "--", *targets],
+                          capture_output=True, check=False)
+    if proc.returncode != 0:
+        return False
+    current: list[re.Pattern] = []
+    for line in proc.stdout.decode("utf-8", "replace").splitlines():
+        if line.startswith("+++ "):
+            rel = line[4:].strip()
+            rel = rel[2:] if rel.startswith("b/") else rel  # "+++ /dev/null"（削除）は拡張子なし
+            current = rs.INLINE_TEST_PATTERNS.get(rs.ext_of(rel), [])
+        elif line.startswith("+") and current:
+            body = line[1:]
+            if any(p.search(body) for p in current):
+                return True
+    return False
+
+
+def staged_has_test(staged: list[str]) -> bool:
+    """検査2/6 の「テスト同梱」判定の正本: テストファイルのパス一致（TEST_PATH_PATTERNS）
+    または追加行のインラインテスト一致（INLINE_TEST_PATTERNS）のいずれか。"""
+    return any(rs.is_test_file(p) for p in staged) or _staged_has_inline_test(staged)
 
 
 # --- 検査4（undeclared-dependency）の抽出器 — データの正本は rs.DEPENDENCY_MANIFESTS ---
@@ -302,11 +339,11 @@ def check_feat_plan(subject: str, staged: list[str]) -> int:
 
 def check_feat_test(subject: str, staged: list[str]) -> None:
     """検査6（feat-without-test — soft・v2.13）。警告のみで exit へ影響しない。"""
-    if not subject.startswith("feat:") or not rs.TEST_PATH_PATTERNS:
+    if not subject.startswith("feat:") or not (rs.TEST_PATH_PATTERNS or rs.INLINE_TEST_PATTERNS):
         return  # テスト判別が未充填なら不発（列充填で有効化——layer-violation と同じ型）
     code_touched = any(rs.ext_of(p) in rs.CODE_EXTS and not rs.is_test_file(p)
                        and not rs.is_generated(p) for p in staged)
-    if code_touched and not any(rs.is_test_file(p) for p in staged):
+    if code_touched and not staged_has_test(staged):
         _emit("SOFT", "feat-without-test", "ステージ済み変更",
               "feat: がコードに触れるのにテストの変更が無い（新機能もテストを同梱する"
               "——soft 警告・コミットは通る。契約と昇格条件は .guardrails/GUARDRAILS.md §3.4 検査6・"
@@ -378,10 +415,13 @@ def main_single(msgfile: str) -> int:
         # 文言修正にはこの正規の逃げ道が必要（無いと文言修正が不可能になる）。
         return 0
 
-    if (subject.startswith("fix:") and rs.TEST_PATH_PATTERNS
-            and not any(rs.is_test_file(p) for p in staged)):
+    if (subject.startswith("fix:")
+            and (rs.TEST_PATH_PATTERNS or rs.INLINE_TEST_PATTERNS)
+            and not staged_has_test(staged)):
         _emit("HARD", "fix-without-test", "ステージ済み変更",
-              "fix: コミットに回帰テストの変更が1つも無い。テストを同梱するか、"
+              "fix: コミットに回帰テストの変更が1つも無い"
+              "（テストファイルのパス一致・インラインテストの追加行一致とも無し）。"
+              "テストを同梱するか、"
               "テストで再現できない修正なら chore/refactor/docs を名乗る（.guardrails/GUARDRAILS.md §3.4）")
         return 1
 

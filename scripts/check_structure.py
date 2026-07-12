@@ -355,7 +355,8 @@ def check_binding_dead_patterns(out: list[Finding]) -> None:
                         ("NONDETERMINISM_PATTERNS", rs.NONDETERMINISM_PATTERNS),
                         ("TEST_NETWORK_PATTERNS", rs.TEST_NETWORK_PATTERNS),
                         ("DEPRECATED_PATTERNS", rs.DEPRECATED_PATTERNS),
-                        ("PRINT_CALL_PATTERNS", rs.PRINT_CALL_PATTERNS)):
+                        ("PRINT_CALL_PATTERNS", rs.PRINT_CALL_PATTERNS),
+                        ("INLINE_TEST_PATTERNS", rs.INLINE_TEST_PATTERNS)):
         for ext in sorted(set(table) - scanned):
             out.append(("HARD", "binding-dead-pattern", f"scripts/repo_scan.py ({name}[{ext!r}])",
                         f"拡張子 {ext} が CODE_EXTS / HEADER_REQUIRED_EXTS に無く検査が不発"

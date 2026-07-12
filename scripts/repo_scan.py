@@ -429,6 +429,16 @@ GENERATED_PATTERNS = [re.compile(p) for p in (
 # --- テストファイルの判別（§3.4 検査2・§9 の検査対象の定義。列充填）---
 TEST_PATH_PATTERNS: list[re.Pattern] = []
 
+# --- インラインテストの判別（§3.4 検査2・検査6 — v2.39。列充填）---
+# テストを別ファイルでなく**同一ファイル内**に同居させる言語（例: Rust の
+# `#[cfg(test)] mod tests`）は、パス判別（TEST_PATH_PATTERNS）ではテスト同梱を検出
+# できない——fix: が実際にテストを足していても fix-without-test で誤ブロックされる。
+# check_commit_msg.py がステージ済み diff の**追加行**をこのパターンで走査し、パス一致
+# との OR で「テスト同梱」とみなす。キー = 拡張子（充填時は CODE_EXTS へも足す——
+# binding-dead-pattern が取りこぼしを検査する §3.3）。パスで判別できる言語は充填不要
+# （「該当なし」の判断はカタログの列に記録する）。
+INLINE_TEST_PATTERNS: dict[str, list[re.Pattern]] = {}
+
 # --- 単一テストファイル実行（§5 red-first 証明 — v2.7・Phase 18。列充填。None なら不発）---
 # check_red_first.py が fix の追加テストを親コミットの worktree 上で1ファイルずつ実行する
 # コマンド。"{file}" トークンが SINGLE_TEST_CWD 相対のテストパスに展開される（dev.py の
