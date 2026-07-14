@@ -43,9 +43,10 @@
 ## 配置済みファイル（新規用と同じ。ゼロから書き直さない）
 
 v2キットは言語なしで出荷され、言語固有値は `bindings/catalog.md` の検証済み列に集約
-（採用列の paste-block を BINDING 領域へ充填し `BINDING-SOURCE` を刻印——§12.7）:
-`scripts/repo_scan.py`（後半の BINDING セクション＝充填先）、`scripts/dev.py`
-（動詞ルーター。COMMANDS が充填先——§12.1）、`.guardrails/GOALS.md`・`bindings/catalog.md`（正本）、
+（採用列の paste-block を**管理区画 `>>> GUARDRAILS BINDING >>>` の内側**へ充填し
+`BINDING-SOURCE` を刻印——§12.7。区画内の充填はキット更新時に自動継承される — Phase 44）:
+`scripts/repo_scan.py`（末尾の管理区画＝充填先）、`scripts/dev.py`
+（動詞ルーター。管理区画内で `COMMANDS.update({...})`——全置換は既定配線を消すため禁止 §12.1）、`.guardrails/GOALS.md`・`bindings/catalog.md`（正本）、
 `scripts/generate_structure.py` / `check_structure.py` / `check_commit_msg.py`（BINDING 参照のみ）、
 `.pre-commit-config.yaml`（BINDING マーカー以下の pre-push フック群）、
 `.claude/hooks/post_edit_format.py`・`post_edit_lint.py`（DISPATCH 辞書——整形とlintの直列2段 §1）、
@@ -73,27 +74,38 @@ Edit|Write|MultiEdit の2 matcher）/ Stop / SessionStart の4キー**と `permi
 - **Step -1a（配置。コミットしない）**: キットが zip / 展開フォルダのままなら、
   **手でコピーせず**配置する（配置済みならスキップ）:
   `python3 -m zipfile -e guardrails-kit-*.zip .guardrails-kit-src` →
-  `scripts/install_kit.py` を探して実行する（GitHub の Download ZIP / Release zip は
+  `scripts/install_kit.py` を探す（GitHub の Download ZIP / Release zip は
   `<repo>-<ブランチ/タグ>/` で1階層ネストされるため固定パスで決め打ちしない——
-  `python3 -c "import glob,subprocess,sys; hits=glob.glob('.guardrails-kit-src/**/scripts/install_kit.py',recursive=True); sys.exit('scripts/install_kit.py が見つからない' if not hits else subprocess.run([sys.executable,hits[0]]).returncode)"`。
-  `python3` が無ければ `py -3` / `uv run --no-project`）。既存リポジトリでは `CONFLICT` が出るのが普通——各行のヒントに
-  従い**既存側へキット要件を統合**（既存エントリは消さない）して再実行し（冪等）、
-  意図して既存を維持する場合のみ `--skip <パス>` で明示する。**exit 0 になるまで
-  Step -1b へ進まない**。exit 0 で zip・展開元は自動削除される。
+  `python3 -c "import glob,sys; hits=glob.glob('.guardrails-kit-src/**/scripts/install_kit.py',recursive=True); print(hits[0] if hits else sys.exit('scripts/install_kit.py が見つからない'))"`。
+  `python3` が無ければ `py -3` / `uv run --no-project`）。実行は3段（v2.42 の CLI — §11 前段）:
+  ① **`<installer> --detect`** — 採用列の候補と「機械で導出できない残りの質問」を採取
+  （Step -1b ①と Step 0 の入力になる。手でコードを読む前に機械に読ませる）
+  ② **`<installer> --diff`** — 書き込みなしで全判定＋差分行数をプレビューし、CONFLICT に
+  なるファイルと原因を**統合作業の前に**全部把握する（1件ずつ踏んで戻るループを消す）
+  ③ 本実行 — 既存リポジトリでは `CONFLICT` が出るのが普通。各行のヒントに従い
+  **既存側へキット要件を統合**（既存エントリは消さない）して再実行し（冪等）、意図して
+  既存を維持する場合のみ `--skip <パス>` で明示する。**exit 0 になるまで Step -1b へ
+  進まない**。exit 0 で zip・展開元は自動削除される。
   `.claude/settings.json` を今回配置・統合した直後は、ユーザーに「`/hooks` で
   PreToolUse: Bash・Edit|Write|MultiEdit / PostToolUse / Stop / SessionStart の4種
   5エントリの有効化を確認し、承認したら『続行』と返信してください」とだけ依頼して待つ
-  （fail-open 防止 — §2・§2c。質問集約の例外）。『続行』を受けたら `git commit --no-verify`
-  を1回試し、**実際にブロックされるか**を実測で確認する。`/hooks` の表示が有効でも
-  ブロックされない場合は、`.claude/settings.json` を**このセッション中に新規作成/統合**
-  したことで、プロセスが起動時にしかフック設定を読み込んでおらず未反映という既知の症状の
-  可能性がある（特に VSCode 拡張のパネル経由）。その場合はユーザーに「このセッションを
-  終了し、VSCode なら拡張のウィンドウをリロード（または別のターミナルで `claude` を
-  同じディレクトリで直接起動）してから新しいセッションで続きを」と依頼して終了する。
-  なお配置したキットファイル群は未コミットのまま Step 0 の最初のコミットに含める。
+  （fail-open 防止 — §2・§2c。質問集約の例外）。『続行』を受けたら
+  **`uv run scripts/dev.py probe --live`** の2段階（sentinel 発行→セッション内で実行→
+  再実行で PASS 判定——§12.1・Phase 44）で、フックが**実経路で**発火していることを
+  機械確認する。PASS しない場合は、`.claude/settings.json` を**このセッション中に
+  新規作成/統合**したことで、プロセスが起動時にしかフック設定を読み込んでおらず未反映と
+  いう既知の症状の可能性がある（特に VSCode 拡張のパネル経由）。その場合はユーザーに
+  「このセッションを終了し、VSCode なら拡張のウィンドウをリロード（または別のターミナルで
+  `claude` を同じディレクトリで直接起動）してから新しいセッションで続きを」と依頼して
+  終了する。なお配置したキットファイル群は未コミットのまま Step 0 の最初のコミットに含める。
 - **Step -1b（棚卸し・読み取り専用・コミットしない）**: 何も書き換えずに現状を測る。
-  ① 言語・レイヤー・テスト配置・生成物・エントリポイントをコードから読み取る
-  ② 既存の CI / git フック / lint 設定 / CLAUDE.md 系文書の有無を列挙する
+  ① 言語・レイヤー・テスト配置・生成物・エントリポイントを確定する——出発点は
+    Step -1a ①の `--detect` 出力（列候補＋根拠）。機械が出せない部分（レイヤー・
+    エントリポイント）だけコードから読み取る
+  ② 既存の CI / git フック / lint 設定 / CLAUDE.md 系文書の有無を列挙する——環境側は
+    `uv run scripts/dev.py doctor` の事実表示（ツール・シム・hooksPath・フック配線）を
+    そのまま使う。門の初期状態は `uv run scripts/dev.py gates` を採取（何が常時有効で
+    何が列充填待ちかの一覧——棚卸しレポートの骨格になる）
   ③ `scripts/repo_scan.py` の BINDING を現実のパスに合わせて**作業コピー上で**仮調整し、
     `uv run scripts/check_structure.py` を実行して**規則IDごとの違反件数**を採取する
   ④ 既存テストを1回実行し赤/緑を採取する
@@ -152,7 +164,10 @@ Edit|Write|MultiEdit の2 matcher）/ Stop / SessionStart の4キー**と `permi
 - **Step 10（総合監査）**: 新規用の監査に加えて、①一時停止中の規則が「BINDING のコメント
   ⇔ §10 の Phase」で1対1に対応している（片方だけの幽霊猶予が無い）②清掃済み Phase の規則が
   実際に有効で違反注入で落ちる ③棚卸しレポートの違反件数と現在値の差分（何件解消し、
-  何件が Phase 待ちか）を最終報告に含める。
+  何件が Phase 待ちか）を最終報告に含める。監査コマンドは
+  `uv run scripts/dev.py selftest`（門コーパス3種一括）→ `doctor`（環境＋check）→
+  `gates`（全門の最終状態——Step -1b の初期採取との差分が「この導入で有効化された門の
+  一覧」としてそのまま最終報告になる）。
 
 ## 絶対規則（既存リポジトリ特有）
 

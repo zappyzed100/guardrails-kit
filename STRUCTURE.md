@@ -12,7 +12,6 @@
 - `AGENTS.md.template`
 - `CLAUDE.md.template`
 - `PROMPT_claude_code.md`
-- `PROMPT_claude_code_easy.md`
 - `PROMPT_claude_code_existing.md`
 - `PROMPT_claude_code_update.md`
 - `PROMPT_codex.md`

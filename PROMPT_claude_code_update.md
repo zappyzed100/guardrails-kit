@@ -34,15 +34,23 @@
   ① git リポジトリであること・**作業ツリーがクリーン**であることを確認する
   （dirty なら停止してユーザーに退避を依頼——UPGRADED は クリーンが条件）。
   ② 更新前の基準線を採取: `uv run scripts/dev.py check` の全出力・
+  **`uv run scripts/dev.py gates` の全出力**（更新差分の第一の機械入力 — U3）・
   現在の `.guardrails/GUARDRAILS.md` §10 の **Phase 最大番号**・
   `scripts/repo_scan.py` の `BINDING-SOURCE` 刻印（列ID@版）。
   ③ 一時停止中の規則（清掃 Phase 登録済みの BINDING 空リスト等）の一覧を控える——
   **更新はこれらを勝手に再有効化しない**。
 - **Step U1（機械配置）**: `python3 -m zipfile -e guardrails-kit-*.zip .guardrails-kit-src` →
-  `python3 -c "import glob,subprocess,sys; hits=glob.glob('.guardrails-kit-src/**/scripts/install_kit.py',recursive=True); sys.exit('scripts/install_kit.py が見つからない' if not hits else subprocess.run([sys.executable,hits[0]]).returncode)"`
-  （`python3` が無ければ `py -3` / `uv run --no-project`）。レポート全行を保存する。
-  `CONFLICT` は各行のヒントに従い**既存側へ統合**（既存エントリ・採用列の追記を消さない）
-  して再実行（冪等）。**exit 0 になるまで Step U2 へ進まない**。
+  インストーラを探す:
+  `python3 -c "import glob,sys; hits=glob.glob('.guardrails-kit-src/**/scripts/install_kit.py',recursive=True); print(hits[0] if hits else sys.exit('scripts/install_kit.py が見つからない'))"`
+  （`python3` が無ければ `py -3` / `uv run --no-project`）。実行は3段（v2.42 — §11 前段）:
+  ① **`<installer> --diff`** — 書き込みなしで UPGRADED/KEPT/CONFLICT と差分行数を
+  プレビュー（CONFLICT の統合方針を適用前に全部決める。管理区画ファイルは
+  「BINDING 区画の充填を保持して更新」と出る＝復元不要の確認）
+  ② 本実行を **`--keep-source` 付き**で行う — レポート全行を保存。`CONFLICT` は各行の
+  ヒントに従い**既存側へ統合**（既存エントリ・採用列の追記を消さない）して再実行（冪等）
+  ③ exit 0 になったら **`--check` で「ドリフト 0 件」を機械確認**する（更新が完全に
+  届いたことの確定判定——自己申告にしない）。0 件を確認後、フラグなしで最後に1回実行して
+  後片付け（全 OK/KEPT・zip と展開元の自動削除）。ここまで済むまで Step U2 へ進まない。
 - **Step U2（消えた充填の復元）**: `git diff` で UPGRADED による消失分を確認し、
   旧版の内容（`git show HEAD:<path>`）から**採用先ローカル部だけ**を新版ファイルへ
   再適用する。**v2.42 から Python 充填先4ファイル（repo_scan / dev / post_edit_format /
@@ -54,10 +62,13 @@
   **復元の向きを間違えないこと**: 新版ファイルを土台に旧充填を移植する。旧ファイルの
   区画を丸ごと戻すのは禁止——新版で増えたスロット（BINDING の新変数等）が消えると
   検査器ごと落ちる。復元後、post_edit/lint フックの指摘はその場で解消する。
-- **Step U3（更新差分の把握。読み取りのみ）**: 旧 GUARDRAILS
-  （`git show HEAD:.guardrails/GUARDRAILS.md`）と新 GUARDRAILS の diff から
-  ① §10 の**増えた Phase**（U0 で控えた最大番号より後）を列挙し、
-  ② §3.3 の規則一覧・§11 Step の変更点を対応づける。
+- **Step U3（更新差分の把握。読み取りのみ）**: 機械入力2本で「何が増えたか」を確定する:
+  ① **gates diff** — `uv run scripts/dev.py gates` を再実行し、U0 ②の基準線出力と
+  突き合わせる。**増えた行＝新しい門・状態が変わった行＝要対応**が一覧でそのまま出る
+  （§10 の散文を読む前に、台帳の差分で全体像を機械的に掴む — Phase 45）。
+  ② **Phase 見出し diff** — 旧 GUARDRAILS（`git show HEAD:.guardrails/GUARDRAILS.md`）と
+  新 GUARDRAILS の diff から、§10 の**増えた Phase**（U0 の最大番号より後）を列挙し、
+  各 Phase 節を①の増分と対応づけて DoD・充填要件を読む。
   `bindings/catalog.md` の採用列の**版が上がっていれば**、paste-block の差分も列挙する。
 - **Step U4（新しい門の実体化）**: U3 で列挙した増分ごとに実施する:
   列充填が要るもの → カタログ新版の paste-block 差分を BINDING へ適用（刻印の版も更新——
@@ -68,8 +79,10 @@
 - **Step U5（検証）**: ① `pre-commit install` を再実行（フック種が増え得る——忘れると
   静かに無効 §0。`hook-type-missing` が検出はする） ② `uv run scripts/dev.py check` を
   実行し **U0 の基準線と比較**する——増えた指摘は「新しい門の正しい検出」か「復元漏れ」かを
-  1件ずつ判定し、復元漏れは直す ③ guard コーパス再生・（新版に在れば）
-  `check_bootstrap.py --verify-scenarios` ④ 既存テスト一式。
+  1件ずつ判定し、復元漏れは直す ③ `uv run scripts/dev.py selftest`（門コーパス3種一括——
+  guard コーパス・所有権ガード・Codex フック） ④ フック層のファイルが UPGRADED された
+  場合は `uv run scripts/dev.py probe --live` で実経路の発火を再実測（更新でフックが
+  静かに死んでいないことの確認） ⑤ 既存テスト一式。
 - **Step U6（コミット）**: 原則1コミット（大きければ「機械配置＋復元」と「新しい門の
   DoD」の2つまで）。件名: `chore: ガードレールキット更新（Phase <旧最大>→<新最大>）`。
   本文: 効くG（例: G13）・UPGRADED/CONFLICT 解消の要約・復元した充填の一覧・
