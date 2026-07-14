@@ -60,8 +60,10 @@
 - `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
 - `scripts/check_ownership_guard.py` — check_ownership_guard.py — 所有権ガード(§2c)の回帰シナリオ再生（契約: .guardrails/GUARDRAILS.md §2c）
 - `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: .guardrails/GUARDRAILS.md §5）
+- `scripts/check_rule_dod.py` — check_rule_dod.py — 列の違反注入コーパスを再生し、各規則が実際に発火することを機械証明する（契約: .guardrails/GUARDRAILS.md §11 Step 2・Phase 47）
 - `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: .guardrails/GUARDRAILS.md §7.5・§3.3）
 - `scripts/dev.py` — dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: .guardrails/GUARDRAILS.md §12.1）
+- `scripts/fill_bindings.py` — fill_bindings.py — 採用列の paste-block を管理区画へ機械充填する（契約: .guardrails/GUARDRAILS.md §11 前段・Phase 47）
 - `scripts/generate_structure.py` — generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: .guardrails/GUARDRAILS.md §7.4）
 - `scripts/install_kit.py` — install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.md §1）
 - `scripts/repo_scan.py` — repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: .guardrails/GUARDRAILS.md §7.3）
@@ -79,6 +81,7 @@
 ## `tests/`
 
 - `tests/guard_corpus.tsv`
+- `tests/injections/python-uv.json`
 
 ## 公開シンボル
 
@@ -193,6 +196,12 @@
 - def check_commit
 - def main
 
+### `scripts/check_rule_dod.py`
+- def run_check
+- def git
+- def resolve_column
+- def main
+
 ### `scripts/check_structure.py`
 - def check_required
 - def check_layers
@@ -218,6 +227,12 @@
 - def main
 
 ### `scripts/dev.py`
+- def main
+
+### `scripts/fill_bindings.py`
+- def column_section
+- def fill_one
+- def stamp_primary
 - def main
 
 ### `scripts/generate_structure.py`

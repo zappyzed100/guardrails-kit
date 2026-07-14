@@ -8,7 +8,7 @@
 # 出荷される——Step 0 で bindings/catalog.md の採用列の paste-block をここへ充填する。
 # 走査ロジック（前半）と言語別抽出関数（中盤）は触らない。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7。未刻印は SOFT:binding-unstamped）
+# BINDING-SOURCE の刻印は下の管理区画内に書く（§12.7。未刻印は SOFT:binding-unstamped）
 #
 # Windows 絶対規則（§7.2）:
 #   - すべての open() に encoding="utf-8" 明示。読み込みは errors="replace"。
@@ -484,6 +484,7 @@ REQUIRED_PATHS = [
     "scripts/install_kit.py", "scripts/check_guard_corpus.py",
     "scripts/check_red_first.py", "scripts/check_bootstrap.py",
     "scripts/check_codex_hooks.py",
+    "scripts/fill_bindings.py", "scripts/check_rule_dod.py",
     "tests/guard_corpus.tsv",
 ]
 
@@ -601,7 +602,11 @@ LOG_EXIT_FILES: set[str] = set()
 # 出口検査の除外プレフィックス。scripts/ はキット自身の出力契約（§3.3 の1違反1行・
 # §12.1 の `[dev] 動詞:` 形式）が stdout/stderr 直書きを規定するため既定で除外——
 # これが無いと python 系の列を採用した瞬間、キット自身が log-direct-call で落ちる（G13）。
-LOG_EXIT_PREFIXES: tuple[str, ...] = ("scripts/",)
+# .claude/hooks/ と .codex/hooks/ も同じ理由で除外（v2.45・Phase 47 の fill 実測で発見:
+# フックの print/stderr は「exit 2 の stderr が Claude に渡る」というハーネス契約そのもの
+# （§1・§2）であり、アプリの単一出口 logOp の管轄外。python-uv 列が【要実測】のまま
+# 実充填されたことが無く、初の機械充填 DoD で 23 件の自己偽陽性として顕在化した）。
+LOG_EXIT_PREFIXES: tuple[str, ...] = ("scripts/", ".claude/hooks/", ".codex/hooks/")
 
 # --- 境界検査（§8.2 missing-catch-unwind 相当: 該当言語がある列のみ）---
 FFI_BOUNDARY_FILE_PATTERNS: list[re.Pattern] = []
@@ -747,6 +752,10 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("install-detect", "§11 導入", "static:install_kit.py --detect", "採用列の候補をマニフェストから提示"),
     ("install-diff-check", "§11 導入", "static:install_kit.py --diff/--check",
      "適用前プレビューと CI 用ドリフト検出"),
+    ("fill-bindings", "§11 導入", "static:fill_bindings.py <列ID@版>",
+     "採用列の paste-block を管理区画へ機械充填＋刻印（Step 0/2 のコピペ作業の機械化）"),
+    ("rule-dod", "§11 導入", "always",
+     "列の違反注入コーパス再生（注入→発火→除去→沈黙の機械証明——dev.py dod）"),
     ("managed-splice", "§11 更新", "static:UPGRADED 時に自動", "管理区画の充填を保持したままキットを更新"),
     ("dev-verbs", "§12.1 実行時", "always", "全プロジェクト共通の開発動詞ルーター（未配線は明示エラー）"),
     ("probe", "§12.1 実行時", "always", "迂回防止への事前照会（実行前に ALLOW/DENY）"),
@@ -761,4 +770,5 @@ GATE_REGISTRY_ENFORCED = {"§3.3", "§3.4", "§8.2", "§8.4", "§9.6", "§12.4",
 # 採用列の paste-block は**この区画内**へ貼る（bindings/catalog.md — §12.7）。
 # インストーラの更新（UPGRADED）はこの区画の中身だけを既存から引き継ぐ（§11 前段・Phase 44）。
 # 刻印（BINDING-SOURCE の行 — §12.7）もこの区画内に書く。
+# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7・区画内=更新で消えない）
 # <<< GUARDRAILS BINDING <<<

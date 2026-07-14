@@ -1,0 +1,42 @@
+{
+  "column": "python-uv",
+  "note": "check_rule_dod.py が再生する違反注入コーパス（Phase 47）。path は充填後の python-uv 列のパターンに一致するよう選んである。content は注入→発火→除去まで自動——手で置かない。",
+  "cases": [
+    {
+      "rule": "test-sleep",
+      "severity": "HARD",
+      "path": "tests/test_dod_probe_sleep.py",
+      "content": "# test_dod_probe_sleep.py — DoD注入（check_rule_dod.py が自動生成・自動削除）\nimport time\n\n\ndef test_probe():\n    time.sleep(1)\n"
+    },
+    {
+      "rule": "test-nondeterminism",
+      "severity": "HARD",
+      "path": "tests/test_dod_probe_now.py",
+      "content": "# test_dod_probe_now.py — DoD注入（自動生成・自動削除）\nfrom datetime import datetime\n\n\ndef test_probe():\n    assert datetime.now() is not None\n"
+    },
+    {
+      "rule": "test-network",
+      "severity": "HARD",
+      "path": "tests/test_dod_probe_net.py",
+      "content": "# test_dod_probe_net.py — DoD注入（自動生成・自動削除）\nimport requests\n\n\ndef test_probe():\n    requests.get(\"http://example.invalid\")\n"
+    },
+    {
+      "rule": "log-direct-call",
+      "severity": "HARD",
+      "path": "src/dod_probe_log.py",
+      "content": "# dod_probe_log.py — DoD注入（自動生成・自動削除）\nprint(\"probe\")\n"
+    },
+    {
+      "rule": "deprecated-api",
+      "severity": "HARD",
+      "path": "src/dod_probe_dep.py",
+      "content": "# dod_probe_dep.py — DoD注入（自動生成・自動削除）\nfrom datetime import datetime\n\nX = datetime.utcnow()\n"
+    },
+    {
+      "rule": "missing-log-coverage",
+      "severity": "SOFT",
+      "path": "src/dod_probe_http.py",
+      "content": "# dod_probe_http.py — DoD注入（自動生成・自動削除）\nimport requests\n\n\ndef fetch():\n    return requests.get(\"http://example.invalid\")\n"
+    }
+  ]
+}

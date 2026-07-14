@@ -69,7 +69,9 @@
   ② **Phase 見出し diff** — 旧 GUARDRAILS（`git show HEAD:.guardrails/GUARDRAILS.md`）と
   新 GUARDRAILS の diff から、§10 の**増えた Phase**（U0 の最大番号より後）を列挙し、
   各 Phase 節を①の増分と対応づけて DoD・充填要件を読む。
-  `bindings/catalog.md` の採用列の**版が上がっていれば**、paste-block の差分も列挙する。
+  `bindings/catalog.md` の採用列の**版が上がっていれば**、paste-block の差分も列挙する
+  （`fill_bindings.py` は初回充填専用——版上げの差分は既存充填との意味マージを含むため
+  U4 で手適用する。適用後の検証は `dev.py dod` が使える——Phase 47）。
 - **Step U4（新しい門の実体化）**: U3 で列挙した増分ごとに実施する:
   列充填が要るもの → カタログ新版の paste-block 差分を BINDING へ適用（刻印の版も更新——
   §12.7）。設定が要るもの → 新 Step の記述どおり（例: required checks・フック種の追加）。

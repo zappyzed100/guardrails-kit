@@ -53,6 +53,9 @@ COMMANDS: dict[str, list[list[str]] | None] = {
                  ["uv", "run", "scripts/check_ownership_guard.py"],
                  ["uv", "run", "scripts/check_codex_hooks.py"]],
              # ↑ 門の違反注入コーパス一括（門のテスト — §2。言語なしで即動く・Phase 44）
+    "dod":   [["uv", "run", "scripts/check_rule_dod.py", "{args}"]],
+             # ↑ 列の違反注入コーパス再生（規則DoDの機械化 — §11 Step 2・Phase 47。
+             #   コーパス未同梱の列では表示つき素通し）
 }
 
 # >>> GUARDRAILS BINDING >>>
@@ -74,6 +77,7 @@ VERB_HELP: dict[str, str] = {
     "probe": "コマンドが迂回防止（§2）に通るか事前照会する（引数: コマンド文字列1つ。--live で実ホスト経路の発火確認）",
     "db": "ローカルDBへ読み取りクエリを投げる（観察レール — §12.3）",
     "selftest": "門の違反注入コーパスを一括再生する（門のテスト — §2）",
+    "dod": "列の違反注入コーパスを再生する（規則DoDの機械化 — Phase 47）",
     "doctor": "環境診断（ツール・シム・フック配線の集約表示 → check を実行）",
     "gates": "門と機能の全一覧を実状態つきで表示する（発見の導線 — §12.1）",
 }

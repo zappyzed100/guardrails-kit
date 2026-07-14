@@ -16,7 +16,7 @@
 # 防ぎ、編集フローは止めない。表示＋素通しの型は §2b/§2c 系の fail-open 側の整理）。
 # --fix 系（自動修正）はここに置かない —— それは整形フック（第1段）の責務。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE の刻印は下の管理区画内に書く（§12.7。未刻印は SOFT:binding-unstamped）
 #
 # ===== BINDING: 対象拡張子 × lint コマンド（bindings/catalog.md 表A「編集直後 lint」）=====
 # v2キットは言語なしで出荷される（下の DISPATCH は空）。Step 0 で採用列の paste-block を
@@ -42,6 +42,7 @@ from pathlib import Path
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "check", "{file}"]]
 # 採用列の paste-block はこの区画内へ。更新はこの区画の中身だけ引き継がれる（Phase 44）。
 DISPATCH: dict[str, list[list[str]]] = {}
+# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7・区画内=更新で消えない）
 # <<< GUARDRAILS BINDING <<<
 
 
