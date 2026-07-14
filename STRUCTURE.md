@@ -14,6 +14,7 @@
 - `PROMPT_claude_code.md`
 - `PROMPT_claude_code_easy.md`
 - `PROMPT_claude_code_existing.md`
+- `PROMPT_claude_code_update.md`
 - `PROMPT_codex.md`
 - `README.md`
 - `README_SETUP.md`
@@ -140,6 +141,7 @@
 - def read_message
 - def read_subject
 - def staged_files
+- def staged_has_test
 - def check_dependencies
 - def check_feat_plan
 - def check_feat_test
@@ -191,6 +193,7 @@
 - def check_layers
 - def check_required_content
 - def check_tests
+- def check_property_tests
 - def check_deprecated
 - def check_log_calls
 - def check_ffi_boundary

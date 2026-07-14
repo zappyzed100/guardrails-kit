@@ -133,6 +133,29 @@ def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
                                     f"{label}。テストは {rs.SOLVER_TEST_WRAPPER_NAME} 経由のみ（§9.1）"))
 
 
+def check_property_tests(texts: dict[str, str], out: list[Finding]) -> None:
+    """性質形テストの存在検査（§9.6 missing-property-test — soft・Phase 43・v2.41）。
+
+    発火条件: SOLVER_DIRECT_CALL_PATTERNS が充填済み（=表Bで確率的コンポーネント有）
+    かつ、全テストファイルのどこにも PROPERTY_TEST_MARKERS が1つも現れない。
+    リポジトリ単位の存在検査（ファイル単位ではない）。マーカー未充填のまま solver
+    だけ充填された状態も警告になる——静かな不発にしない（G9。マーカー充填で解消）。
+    """
+    if not rs.SOLVER_DIRECT_CALL_PATTERNS:
+        return
+    for rel, text in texts.items():
+        if not rs.is_test_file(rel):
+            continue
+        for pat, _label in rs.PROPERTY_TEST_MARKERS:
+            if pat.search(text):
+                return
+    out.append(("SOFT", "missing-property-test", "(repo)",
+                "確率的コンポーネントがあるのに性質形テストの痕跡が無い"
+                "（実例オラクルだけの検証は実装と欠陥を共有し得る — §9.6。"
+                "PBT ライブラリの import 等を PROPERTY_TEST_MARKERS へ充填し、"
+                "性質形テストを1つ以上書く）"))
+
+
 def check_deprecated(texts: dict[str, str], out: list[Finding]) -> None:
     """世代交代 API 検査（§3.3 deprecated-api — Phase 15・v2.6）。
 
@@ -549,6 +572,7 @@ def main() -> int:
     check_layers(texts, findings)
     check_required_content(root, files, texts, findings)
     check_tests(texts, findings)
+    check_property_tests(texts, findings)
     check_deprecated(texts, findings)
     check_log_calls(texts, findings)
     check_log_boundary_coverage(texts, findings)

@@ -343,8 +343,14 @@ export function logOp(tag: string, op: string, detail: string, opts: LogOptions 
 
 ---
 
-## 列: python-uv@7 — Python（uv・CLI/バックエンド）【要実測】
+## 列: python-uv@8 — Python（uv・CLI/バックエンド）【要実測】
 
+> @8（v2.41）: 「確率的コンポーネント」「性質テストマーカー」の2行と paste-block 2行、
+> 性質形テストのサンプル（下記）を追加（§9.6 missing-property-test — Phase 43）。
+> サンプルは **hypothesis で実行して 3 性質 pass・違反注入（容量チェック除去）で
+> 不変量が fail を実測**。マーカー検出は check_structure の DoD フィクスチャで
+> 4ケース実測（solver充填＋性質無し→SOFT／hypothesis import→沈黙／solver未充填→沈黙／
+> マーカー未充填→SOFT）。
 > @7（v2.39）: 「テスト判別（インライン）」の1行を追加（該当なし判断——判断もカタログに記録する。paste-block の変更なし）。
 > @6（v2.20）: ログ単一出口 `log_op` の実サンプル（下記 paste-block）と `LOG_BOUNDARY_PATTERNS`
 > 行を追加。フィールド設計は OpenTelemetry Logs Data Model の命名（timestamp/severity/body/
@@ -380,6 +386,8 @@ export function logOp(tag: string, op: string, detail: string, opts: LogOptions 
 | 単一テストファイル実行 | `uv run pytest {file}`（cwd=ルート。red-first ジョブの BINDING 追加セットアップは不要——setup-uv で足りる — §5） |
 | 依存マニフェスト | `pyproject.toml`（project.dependencies）— 既定表に同梱済み（確認のみ・追記不要） |
 | 設計根拠の対象レイヤー | `src`（`PLAN_LAYER_ROOTS` — §3.4 検査5） |
+| 確率的コンポーネント | ソルバー・乱数探索有りなら `solve_for_test(input, seed, max_time)` ラッパー必須（§9.1——UNKNOWN は三値の第三ラベル）＋性質形テスト（§9.6。無ければ「該当なし」） |
+| 性質テストマーカー | `from hypothesis import` / `import hypothesis`（`PROPERTY_TEST_MARKERS` — §9.6。確率的コンポーネント有の場合のみ充填） |
 | `up`/`reset`/`seed`/`time`/`db` | 構成依存（DBを持つならDBの reset/seed を配線。持たないなら「該当なし」） |
 | 操作レール | subprocess で本体CLIを叩く（ブラウザ不要のためMCP不要） |
 | 観察レール | stdout/stderr＋単一出口ログ |
@@ -407,6 +415,9 @@ DEPRECATED_PATTERNS[".py"] = [
 PLAN_LAYER_ROOTS += ["src"]
 SINGLE_TEST_COMMAND = ["uv", "run", "pytest", "{file}"]   # 単一スロット（併用時はプライマリ列のみ — §5）
 LOG_EXIT_FILES |= {"src/log.py"}   # 実パスへ調整（scripts/ 配下は LOG_EXIT_PREFIXES が既定除外 — §3.3）
+# 確率的コンポーネント有（表B）の場合のみ以下2行を充填（無ければ貼らない——§9.6）:
+# SOLVER_DIRECT_CALL_PATTERNS += [(re.compile(r"\bsolve\s*\("), "ソルバー本体の直呼び")]
+# PROPERTY_TEST_MARKERS += [(re.compile(r"\bfrom hypothesis import|\bimport hypothesis\b"), "hypothesis")]
 # ORPHAN_UNIVERSES は既定のまま不発（Pythonのimport解決は近似が粗い。必要なら列を版上げ）
 # SYMBOL_EXTRACTORS[".py"] は出荷既定で有効（キット自身の索引のため）——追記不要
 ```
@@ -491,6 +502,51 @@ DISPATCH[".py"] = [["ruff", "check", "{file}"]]
 （`uv tool install ruff` を実行しない/できない環境では `["uvx", "ruff", "check", "{file}"]`
 のまま使ってもよい——動作は同じで約60ms/回遅いだけ。速度より導入の手軽さを優先する
 判断も正当。DoD実測: 違反→exit 2＋stderr／クリーン→exit 0／ツール未導入→表示素通し）
+
+**サンプル実装（性質形テスト——§9.6。実行して 3 性質 pass・違反注入で fail を確認済み・
+2026-07-14）**:
+
+実例オラクル（「この入力ならビン3個」と期待値を書く）は使わない——期待値の導出が実装と
+同じ思考なら共倒れする（self-deception — surveys/SURVEY_LLM_TESTGEN.md）。代わりに
+**どんな出力でも成り立つべき性質**（不変量・メタモルフィック関係）だけを主張する。
+被検体はサンプル用の first-fit ビンパッキング（`pack(sizes, capacity)`）——制約充足系の
+最小模型として選んだ。導入は `uv add --dev hypothesis`。
+
+```python
+# test_properties.py — 性質形テストのサンプル（§9.6——実例オラクルでなく不変量・関係を主張する）
+from hypothesis import given, strategies as st
+
+from packer import pack
+
+
+@given(st.lists(st.integers(min_value=1, max_value=10), max_size=50), st.integers(10, 20))
+def test_no_bin_exceeds_capacity(sizes, capacity):
+    """不変量: どのビンも容量を超えない（ハード制約——正解表なしで検証可能）。"""
+    bins = pack(sizes, capacity)
+    assert all(sum(b) <= capacity for b in bins)
+
+
+@given(st.lists(st.integers(min_value=1, max_value=10), max_size=50), st.integers(10, 20))
+def test_all_items_packed_exactly_once(sizes, capacity):
+    """不変量: 全アイテムが過不足なく詰められる（多重集合として一致）。"""
+    bins = pack(sizes, capacity)
+    assert sorted(x for b in bins for x in b) == sorted(sizes)
+
+
+@given(st.lists(st.integers(min_value=1, max_value=10), max_size=50), st.integers(10, 20))
+def test_metamorphic_adding_item_never_reduces_bins(sizes, capacity):
+    """メタモルフィック関係: アイテムを増やしてビン数が減ることはない。"""
+    assert len(pack(sizes + [1], capacity)) >= len(pack(sizes, capacity))
+```
+
+実測（2026-07-14・hypothesis 既定 100 例/性質）: クリーン→ `3 passed in 1.28s`。
+違反注入（`pack` の容量チェックを除去）→ `test_no_bin_exceeds_capacity` が反例つきで
+fail——性質が実際にバグを捕まえることの確認（テストのテスト——§0 の違反注入と同じ型）。
+
+**このサンプルが規定しないもの**: 実プロジェクトの性質の中身（ソルバーなら「ハード制約
+充足」を独立チェッカー関数にして全性質テストから呼ぶ——§9.6 差分検証）・`@settings`
+チューニング（例数・deadline）・CI での実行時間予算。ソルバー呼び出しを含む性質テストは
+`solve_for_test` 経由必須（§9.1——`test-calls-solver-direct` が直呼びを止める）。
 
 ---
 
@@ -619,8 +675,12 @@ void logOp(
 
 ---
 
-## 列: rust@6 — Rust（engine/ 層・ソルバー等）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+## 列: rust@7 — Rust（engine/ 層・ソルバー等）【ゲート系=移植元で実測済み／ランタイム系=要実測】
 
+> @7（v2.41）: 「性質テストマーカー」の1行と paste-block 1行を追加（§9.6
+> missing-property-test — Phase 43）。マーカー検出の機構自体は check_structure の DoD
+> フィクスチャで実測済み・proptest パターンの実地一致は**未実測**（proptest 採用先で
+> 実測して昇格——判断ごと記録）。
 > @6（v2.40）: ログ単一出口 `log_op` の実サンプル（下記 paste-block）を追加——python-uv 列
 > @6（v2.20）の参考実装の他列展開（§8.2）。**実行して有効なJSON1行×4ケースを確認**
 > （Rust 1.96・serde_json + chrono——エラー系・WARN・エスケープ・日本語込み）。
@@ -653,7 +713,8 @@ void logOp(
 | 非推奨・世代交代パターン | 該当なし（出典①②で裏取りできた初期値が現時点で無い——コンパイラ・clippy の deprecation 警告が同役を担う言語のため、列で重ねる価値が薄い。見つけたら版上げで還元） |
 | 依存マニフェスト | `Cargo.toml`（dependencies。`[dependencies.x]` サブテーブル形式も検知）— 既定表に同梱済み（確認のみ・追記不要） |
 | 設計根拠の対象レイヤー | `engine/src`（`PLAN_LAYER_ROOTS` — §3.4 検査5） |
-| 確率的コンポーネント | ソルバー有りなら `solve_for_test(input, seed, max_time)` ラッパー必須（§9.1・同一seed2回一致） |
+| 確率的コンポーネント | ソルバー有りなら `solve_for_test(input, seed, max_time)` ラッパー必須（§9.1・同一seed2回一致・UNKNOWN は三値の第三ラベル） |
+| 性質テストマーカー | `proptest!` / `use proptest`（`PROPERTY_TEST_MARKERS` — §9.6。確率的コンポーネント有の場合のみ充填）【要実測】 |
 | 境界検査 | FFI境界（例 `^engine/src/api(/|\.rs$)`）に `catch_unwind` 必須（`missing-catch-unwind`） |
 
 **paste-block（`scripts/repo_scan.py` BINDING へ）**:
@@ -675,6 +736,7 @@ PRINT_CALL_PATTERNS[".rs"] = [(re.compile(r"\bprintln!\s*\("), "println!"),
 LOG_EXIT_FILES |= {"engine/src/logging.rs"}
 FFI_BOUNDARY_FILE_PATTERNS = [re.compile(r"^engine/src/api(/|\.rs$)")]
 SOLVER_DIRECT_CALL_PATTERNS = [(re.compile(r"\bsolve\s*\("), "ソルバー本体の直呼び")]  # ソルバー有りの場合
+PROPERTY_TEST_MARKERS += [(re.compile(r"\bproptest!|\buse proptest\b"), "proptest")]  # 同上（§9.6）
 ORPHAN_UNIVERSES += [(["engine/src/"], ".rs",
                       [re.compile(p) for p in (r"(^|/)src/lib\.rs$", r"(^|/)src/main\.rs$",
                                                r"(^|/)build\.rs$", r"(^|/)src/bin/[^/]+\.rs$",

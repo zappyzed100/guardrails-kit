@@ -586,6 +586,14 @@ PLAN_LAYER_ROOTS: list[str] = []
 SOLVER_DIRECT_CALL_PATTERNS: list[tuple[re.Pattern, str]] = []
 SOLVER_TEST_WRAPPER_NAME = "solve_for_test"   # この名前を含む行は許可（ラッパー経由）
 
+# --- 性質形テストの存在検査（§9.6 missing-property-test — v2.41・Phase 43・soft。列充填）---
+# 確率的コンポーネント有（SOLVER_DIRECT_CALL_PATTERNS 充填）のリポジトリでは、実例
+# オラクル（期待値のハードコード）だけの検証はテストが実装と欠陥を共有し得る
+# （self-deception — surveys/SURVEY_LLM_TESTGEN.md）。テストファイルのどこにも性質形
+# テストの痕跡（PBT ライブラリの import 等——列充填）が無ければ soft 警告する。
+# 性質の中身・質は検査しない——存在検査のみ（NO-LOG と同じ境界の引き方 — G9）。
+PROPERTY_TEST_MARKERS: list[tuple[re.Pattern, str]] = []
+
 # --- print 系直呼び（§8.2 log-direct-call: 出口の単一化。列充填）---
 PRINT_CALL_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 # print 系を呼んでよい唯一の出口（§8.2。列充填）
