@@ -75,7 +75,45 @@ VERB_HELP: dict[str, str] = {
     "db": "ローカルDBへ読み取りクエリを投げる（観察レール — §12.3）",
     "selftest": "門の違反注入コーパスを一括再生する（門のテスト — §2）",
     "doctor": "環境診断（ツール・シム・フック配線の集約表示 → check を実行）",
+    "gates": "門と機能の全一覧を実状態つきで表示する（発見の導線 — §12.1）",
 }
+
+
+def _gates(root: Path) -> int:
+    """門の台帳（rs.GATE_REGISTRY）を、このリポジトリでの実状態つきで表示する（Phase 45）。
+
+    状態は実物から計算する（バインディング充填の有無・settings.json の配線）——
+    手書きの機能一覧を持たないための機構。台帳と検査器コードの一致は
+    check_structure の gates-registry-drift（hard）が別途機械検査する。
+    """
+    print("[dev] gates: 門と機能の一覧（このリポジトリの実状態。契約の正本は "
+          ".guardrails/GUARDRAILS.md の各節）")
+    settings_text = ""
+    sp = root / ".claude" / "settings.json"
+    if sp.is_file():
+        settings_text = sp.read_text(encoding="utf-8", errors="replace")
+    current = None
+    for gid, cat, act, desc in rs.GATE_REGISTRY:
+        if cat != current:
+            print(f"\n  [{cat}]")
+            current = cat
+        if act == "always":
+            status = "有効"
+        elif act.startswith("var:"):
+            status = ("有効（充填済み）" if getattr(rs, act[4:], None)
+                      else "未充填（列充填で有効化 — Step 0）")
+        elif act.startswith("vars:"):
+            status = ("有効（充填済み）"
+                      if any(getattr(rs, n, None) for n in act[5:].split("|"))
+                      else "未充填（列充填で有効化 — Step 0）")
+        elif act.startswith("hook:"):
+            status = "配線済み" if act[5:] in settings_text else "未配線（settings.json）"
+        else:  # static:
+            status = act.split(":", 1)[1]
+        print(f"    {gid:<28} {status:<24} {desc}")
+    print("\n[dev] gates: 逃げ道・DoD・限界の詳細は各節。導入後のカスタム項目は "
+          ".guardrails/CUSTOMIZE.md、保留（トリガー待ち）は §10 保留節")
+    return 0
 
 
 def _doctor(root: Path) -> int:
@@ -172,6 +210,7 @@ def _print_verbs() -> None:
         wired = "配線済み" if COMMANDS[verb] else "未配線"
         print(f"  {verb:<8} {wired:<4}  {VERB_HELP.get(verb, '')}")
     print(f"  {'doctor':<8} 内蔵    {VERB_HELP['doctor']}")
+    print(f"  {'gates':<8} 内蔵    {VERB_HELP['gates']}")
 
 
 def main(argv: list[str]) -> int:
@@ -182,6 +221,8 @@ def main(argv: list[str]) -> int:
     verb, args = argv[0], argv[1:]
     if verb == "doctor":
         return _doctor(rs.repo_root())
+    if verb == "gates":
+        return _gates(rs.repo_root())
     if verb == "probe" and args == ["--live"]:
         return _probe_live(rs.repo_root())
     if verb not in COMMANDS:

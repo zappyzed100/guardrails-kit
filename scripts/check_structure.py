@@ -133,6 +133,51 @@ def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
                                     f"{label}。テストは {rs.SOLVER_TEST_WRAPPER_NAME} 経由のみ（§9.1）"))
 
 
+_GATE_EMIT_PATTERNS = [
+    re.compile(r'\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
+    re.compile(r'_emit\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),  # check_commit_msg の _emit 形
+    re.compile(r'"(?:HARD|SOFT):([a-z0-9-]+)'),           # 文字列直書き形（履歴再実行等）
+]
+_GATE_SOURCE_FILES = ["scripts/check_structure.py", "scripts/check_commit_msg.py",
+                      "scripts/repo_scan.py"]
+
+
+def check_gates_registry(root: Path, out: list[Finding]) -> None:
+    """門の台帳（GATE_REGISTRY — §12.1 `dev.py gates`）と検査器コードの一致検査
+    （gates-registry-drift・hard — Phase 45・v2.43）。
+
+    台帳は「何ができるか」の発見導線であり、検査器と食い違えば一覧が嘘をつく（G9）。
+    照合は2方向: ① 検査器が emit する規則ID（リテラル）が台帳に無い→未登録
+    ② 台帳の強制対象区分（GATE_REGISTRY_ENFORCED）のIDがどのソースにも現れない→台帳が古い。
+    """
+    sources: dict[str, str] = {}
+    for rel in _GATE_SOURCE_FILES:
+        try:
+            sources[rel] = rs.read_text(root, rel)
+        except OSError:
+            return  # ソース欠落は missing-required の持ち場（二重報告しない — G4）
+    emitted: set[str] = set()
+    for rel in ("scripts/check_structure.py", "scripts/check_commit_msg.py"):
+        for pat in _GATE_EMIT_PATTERNS:
+            emitted |= set(pat.findall(sources[rel]))
+    registry_ids = {gid for gid, _, _, _ in rs.GATE_REGISTRY}
+    for gid in sorted(emitted - registry_ids):
+        out.append(("HARD", "gates-registry-drift", gid,
+                    "検査器が emit する規則IDが GATE_REGISTRY に未登録"
+                    "（scripts/repo_scan.py の台帳へ1行足す — §12.1 gates）"))
+    # 逆方向: 台帳の行そのものも union（repo_scan.py）に含まれるため、存在1回では
+    # 「台帳にだけ書いた幽霊規則」と区別できない——**2回以上**（台帳の行＋実装側の実体）を
+    # 要求する（自己循環の除去。Phase 45 の違反注入で実測した穴）。
+    union = "\n".join(sources.values())
+    for gid, cat, _act, _desc in rs.GATE_REGISTRY:
+        if cat.split(" ", 1)[0] not in rs.GATE_REGISTRY_ENFORCED:
+            continue
+        if gid not in emitted and union.count(gid) < 2:
+            out.append(("HARD", "gates-registry-drift", gid,
+                        "GATE_REGISTRY にあるが検査器コードのどこにも現れない"
+                        "（規則を消したなら台帳からも消す — §12.1 gates）"))
+
+
 def check_property_tests(texts: dict[str, str], out: list[Finding]) -> None:
     """性質形テストの存在検査（§9.6 missing-property-test — soft・Phase 43・v2.41）。
 
@@ -573,6 +618,7 @@ def main() -> int:
     check_required_content(root, files, texts, findings)
     check_tests(texts, findings)
     check_property_tests(texts, findings)
+    check_gates_registry(root, findings)
     check_deprecated(texts, findings)
     check_log_calls(texts, findings)
     check_log_boundary_coverage(texts, findings)
