@@ -198,8 +198,14 @@
 
 ### `scripts/check_rule_dod.py`
 - def run_check
+- def run_commit_msg
 - def git
 - def resolve_column
+- def case_files
+- def requires_met
+- def write_files
+- def remove_files
+- def token_of
 - def main
 
 ### `scripts/check_structure.py`

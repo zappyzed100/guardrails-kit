@@ -357,8 +357,9 @@ export function logOp(tag: string, op: string, detail: string, opts: LogOptions 
 > @9（v2.45）: 機械充填マーカー `<!-- FILL <対象> -->` を付与し、散文だった dev.py
 > COMMANDS / post_edit_format DISPATCH の充填を fenced paste-block へ変換
 > （`scripts/fill_bindings.py` の自動適用対象——Phase 47。コマンド値の変更なし）。
-> 違反注入コーパス `tests/injections/python-uv.json`（6規則）を同梱——
-> `dev.py dod` が再生する（DoD の機械化）。
+> 違反注入コーパス `tests/injections/python-uv.json`（12ケース——check 段8＋commit 段4。
+> 言語なしの6ケースは common.json 側）を同梱——`dev.py dod` が再生する（DoD の機械化。
+> 対象外の規則と理由は GUARDRAILS §10 Phase 47 追記が正本）。
 > @8（v2.41）: 「確率的コンポーネント」「性質テストマーカー」の2行と paste-block 2行、
 > 性質形テストのサンプル（下記）を追加（§9.6 missing-property-test — Phase 43）。
 > サンプルは **hypothesis で実行して 3 性質 pass・違反注入（容量チェック除去）で
