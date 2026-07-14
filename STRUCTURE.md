@@ -68,6 +68,7 @@
 - `surveys/SURVEY_COMPANY_GATES.md`
 - `surveys/SURVEY_FAMOUS_KITS.md`
 - `surveys/SURVEY_GATE_ARCHITECTURES.md`
+- `surveys/SURVEY_LLM_TESTGEN.md`
 - `surveys/SURVEY_MCP_ECOSYSTEM.md`
 - `surveys/SURVEY_ZERO_REVIEW.md`
 
