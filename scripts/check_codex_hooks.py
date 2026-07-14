@@ -17,6 +17,11 @@ REQUIRED_EVENTS = {"PreToolUse", "PostToolUse", "SessionStart", "Stop"}
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     try:
         config = json.loads(HOOKS.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -92,6 +97,17 @@ def main() -> int:
         stop_proc = subprocess.run([sys.executable, str(ADAPTER), "direct", "stop_incomplete_guard.py"],
                                    input=stop_payload, text=True, encoding="utf-8", errors="replace",
                                    cwd=root, capture_output=True)
+        malformed_proc = subprocess.run(
+            [sys.executable, str(ADAPTER), "direct", "guard_git_bypass.py"],
+            input="{not-json", text=True, encoding="utf-8", errors="replace",
+            cwd=root, capture_output=True,
+        )
+        missing_root_proc = subprocess.run(
+            [sys.executable, str(ADAPTER), "direct", "guard_git_bypass.py"],
+            input=json.dumps({"cwd": str(root / "missing"),
+                              "tool_input": {"command": "git commit --no-verify"}}),
+            text=True, encoding="utf-8", errors="replace", cwd=root, capture_output=True,
+        )
     if actual != expected:
         print(f"HARD:codex-hook-adapter apply_patch の対象抽出が不正: {actual!r}", file=sys.stderr)
         return 1
@@ -103,6 +119,9 @@ def main() -> int:
         return 1
     if stop_proc.returncode != 2 or "HARD:codex-hooks-invalid fixture" not in (stop_proc.stderr or ""):
         print("HARD:codex-stop-gate dev.py check に追加された検査を回収できない", file=sys.stderr)
+        return 1
+    if malformed_proc.returncode != 2 or missing_root_proc.returncode != 2:
+        print("HARD:codex-hook-adapter 操作直前ガードの異常入力がfail-open", file=sys.stderr)
         return 1
     print("[codex-hooks] 設定・Windows経路・apply_patch入力変換 PASS")
     return 0

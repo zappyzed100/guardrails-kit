@@ -56,9 +56,16 @@ RE_GIT_CONFIG_GET = re.compile(r"--get(-all|-regexp)?\b")
 # 消す・無効化する、または `>`（切り詰め）で潰す操作。`pre-commit uninstall` と同じ全ゲート
 # 迂回だが「uninstall」の語を使わない経路（`rm .git/hooks/pre-commit` 等）が素通しだった。
 # 参照だけ（cat / ls）は素通し——変異動詞か切り詰めリダイレクトを伴う時のみブロック。
-RE_HOOKS_SHIM = re.compile(r"\.git/hooks/")
-RE_HOOK_MUTATE = re.compile(r"\b(?:rm|mv|chmod|ln|tee|truncate)\b")
-RE_HOOK_REDIRECT = re.compile(r">\s*\.git/hooks/")
+RE_HOOKS_SHIM = re.compile(
+    r"(?:^|[\s=\"'])(?:\./)?\.git/hooks(?:/|(?=[\s\"']|$))", re.IGNORECASE
+)
+RE_HOOK_MUTATE = re.compile(
+    r"\b(?:rm|mv|cp|chmod|ln|tee|truncate|install|del|erase|copy|move|"
+    r"remove-item|move-item|copy-item|rename-item|set-content|clear-content|out-file|new-item)\b",
+    re.IGNORECASE,
+)
+RE_SHELL_LAUNCH = re.compile(r"\b(?:powershell|pwsh|cmd)\b", re.IGNORECASE)
+RE_HOOK_REDIRECT = re.compile(r">+\s*(?:\./)?\.git/hooks(?:/|(?=\s|$))", re.IGNORECASE)
 CMD_SPLIT = re.compile(r"&&|\|\||;|\|")
 RE_SKIP = re.compile(r"(^|[;&|\s])SKIP=")
 RE_NFLAG = re.compile(r"(^|\s)-[a-mo-zA-Z]*n[a-zA-Z]*(\s|$)")
@@ -105,6 +112,10 @@ def worktree_dirty_or_unknown(project_dir: str) -> bool:
 def check(cmd: str) -> None:
     no_newlines = cmd.replace("\n", " ")
     stripped = QUOTE_STRIP.sub("", no_newlines)
+    # Windows の `\` と重複 `/` を正規化してからパスを判定する。シェルが異なっても
+    # `.git/hooks` は同じ実体であり、表記差を迂回路にしない（§2・G7）。
+    normalized = re.sub(r"/+", "/", stripped.replace("\\", "/"))
+    raw_normalized = re.sub(r"/+", "/", no_newlines.replace("\\", "/"))
     # v2.28: 全フック迂回とcommit/push系はセグメント（&&/||/;/|区切り）単位で判定する。
     # 全文字列を1本の対象として見ると、無関係なセグメントに散らばった部分文字列同士が
     # 組み合わさって誤検知する（実測2件: `git config --get core.hooksPath` が
@@ -113,7 +124,7 @@ def check(cmd: str) -> None:
     # 文字列が `\bcommit\b` に一致してしまい発火していた）。セグメント単位にしても
     # 実コマンドは1セグメント内で完結する（`git commit -n` を `&&` 等で分割して書く
     # ことに実用上の意味は無い）ため、本来の検知力は落ちない——過剰ブロックの緩和のみ。
-    segments = CMD_SPLIT.split(stripped)
+    segments = CMD_SPLIT.split(normalized)
 
     # 全フック迂回: core.hooksPath の付け替え（`git config core.hooksPath …`・
     # `git -c core.hooksPath=…`）。フック本体ごと差し替えれば --no-verify 検査は
@@ -137,9 +148,13 @@ def check(cmd: str) -> None:
     # 通し、変異動詞（rm/mv/chmod/ln/tee/truncate）か切り詰めリダイレクト（`> .git/hooks/…`）
     # を伴う時だけブロックする。`pre-commit install`（語に .git/hooks/ を含まない正規の
     # 再導入）は素通し。
-    for seg in segments:
-        if RE_HOOK_REDIRECT.search(seg) or (
-            RE_HOOKS_SHIM.search(seg) and RE_HOOK_MUTATE.search(seg)
+    for raw_seg in CMD_SPLIT.split(raw_normalized):
+        code_seg = QUOTE_STRIP.sub("", raw_seg)
+        if RE_HOOK_REDIRECT.search(code_seg) or (
+            RE_HOOKS_SHIM.search(raw_seg) and RE_HOOK_MUTATE.search(code_seg)
+        ) or (
+            RE_SHELL_LAUNCH.search(code_seg) and RE_HOOKS_SHIM.search(raw_seg)
+            and RE_HOOK_MUTATE.search(raw_seg)
         ):
             block(".git/hooks/ 配下のフックシムの改変/除去（pre-commit uninstall と同じ全ゲート迂回）")
 

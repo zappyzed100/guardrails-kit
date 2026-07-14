@@ -33,6 +33,16 @@ DENY	echo > .git/hooks/pre-commit
 DENY	echo x | tee .git/hooks/pre-commit
 DENY	truncate -s0 .git/hooks/commit-msg
 DENY	rm .git/hooks/pre-push
+DENY	mv .git/hooks C:/tmp/hooks-off
+DENY	rm .git\hooks\pre-commit
+DENY	Remove-Item .git\hooks\pre-commit
+DENY	Copy-Item NUL .git\hooks\pre-commit
+DENY	cp /dev/null .git/hooks/pre-commit
+DENY	rm .git//hooks/pre-commit
+DENY	Remove-Item ".git\hooks\pre-commit"
+DENY	rm '.git/hooks/pre-commit'
+DENY	powershell -Command "Remove-Item .git\hooks\pre-commit"
+DENY	cmd /c "del .git\hooks\pre-push"
 ALLOW	git status
 ALLOW	git diff --stat
 ALLOW	git log --oneline -n 5
@@ -50,6 +60,7 @@ ALLOW	pre-commit run --all-files
 ALLOW	pre-commit install
 ALLOW	cat .git/hooks/pre-commit
 ALLOW	ls -la .git/hooks/
+ALLOW	echo "rm .git/hooks/pre-commit"
 DENY	rm -rf .git
 DENY	rm -fr .git
 DENY	rm -rf ./.git

@@ -55,15 +55,17 @@ def main(argv: list[str]) -> int:
     if len(argv) != 3 or argv[1] not in {"direct", "files", "guarded-files"}:
         print("codex_hook_adapter: usage: <direct|files|guarded-files> <hook-script>", file=sys.stderr)
         return 2
+    fail_closed = argv[1] == "direct" and argv[2] == "guard_git_bypass.py"
     raw = sys.stdin.read()
     try:
         payload = json.loads(raw) if raw.strip() else {}
-    except ValueError:
-        return 0
+    except ValueError as exc:
+        print(f"[codex-hook-adapter] 入力JSONを解釈できない: {exc}", file=sys.stderr)
+        return 2 if fail_closed else 0
     root = project_root(payload)
     if not root:
         print("[codex-hook-adapter] git root を解決できないためフックをスキップ", file=sys.stderr)
-        return 0
+        return 2 if fail_closed else 0
     # 防壁本体は .claude/hooks にだけ置く。Codexはイベント形式だけを変換し、規則実装を複製しない。
     script = Path(root) / ".claude" / "hooks" / argv[2]
     if not script.is_file():
