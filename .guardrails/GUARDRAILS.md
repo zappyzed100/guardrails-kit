@@ -979,7 +979,9 @@ Windows 32コア機の実測に基づき是正**: 並列度は `os.cpu_count()` 
   timestamp・level・trace_id）・12-factor app「ログはイベントストリーム」に揃えた1行1JSON。
   サンプルは**貼り替え自由な出発点**であり、`check_structure.py` は中身を検査しない
   （`log-direct-call` が見るのは「経由したか」だけ）。他列（ts-react-web/rust/dart-flutter）
-  への展開は未実施——今後の列充填で追加する。
+  へも同型のサンプルを展開済み（v2.40——各列とも実行して有効なJSON出力を4ケース確認。
+  `LOG_BOUNDARY_PATTERNS`/`LOG_CALL_PATTERN` の充填は3列とも未実施のまま——§8.4 の
+  被覆検査DoDを伴う列充填の仕事として残る）。
 
 ### 8.3 秘密の多層防御と責務の境界
 - コミット面 = gitleaks（§3.1）が機械検査。
