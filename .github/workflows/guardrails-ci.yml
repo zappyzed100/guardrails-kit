@@ -54,6 +54,8 @@ jobs:
           fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（§5）
       - uses: astral-sh/setup-uv@v5
       # ---- BINDING: 採用列のテスト実行環境をここへ（例: setup-node + npm ci。§5・§11 表A）----
+      # >>> GUARDRAILS BINDING: red-first-setup >>>
+      # <<< GUARDRAILS BINDING: red-first-setup <<<
       # ---------------------------------------------------------------------------------------
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
 
@@ -80,3 +82,5 @@ jobs:
   # paste-block（テスト/解析ジョブ・E2E ジョブ・ツールチェーン固定）をここへ貼る。
   # 各ジョブに timeout-minutes を必ず付ける（checks と同じハング保険 — G11）。
   # E2E ジョブは §12.4 の操作レールの CI 変換（PR の赤/緑に変える）——Step 8b の DoD に含まれる。
+  # >>> GUARDRAILS BINDING: language-jobs >>>
+  # <<< GUARDRAILS BINDING: language-jobs <<<

@@ -64,6 +64,20 @@ repos:
         pass_filenames: false
         files: ^(\.claude/hooks/guard_git_bypass\.py|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
 
+      - id: rule-dod
+        name: "rule-dod (規則違反注入コーパス再生 — §11)"
+        entry: uv run scripts/check_rule_dod.py
+        language: system
+        pass_filenames: false
+        files: ^(scripts/check_rule_dod\.py|tests/injections/|scripts/repo_scan\.py)$
+
+      - id: fill-bindings-corpus
+        name: "fill-bindings-corpus (充填器の失敗時無変更 — §11)"
+        entry: uv run scripts/check_fill_bindings.py
+        language: system
+        pass_filenames: false
+        files: ^(scripts/fill_bindings\.py|scripts/check_fill_bindings\.py|scripts/install_kit\.py|bindings/catalog\.md)$
+
       # ---- §2c 所有権ガードの回帰シナリオ再生（files: で門番3点に限定。CI の
       #      --all-files では常時回る — v2.29・G10「§10保留」の解消）----
       - id: ownership-guard
@@ -109,3 +123,5 @@ repos:
       # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
       # paste-block（テスト・静的解析の pre-push フック群）をここへ貼る
       # （stages: [pre-push] は維持。コードよりゲートが先 — §11 Step 6）。
+      # >>> GUARDRAILS BINDING: pre-push >>>
+      # <<< GUARDRAILS BINDING: pre-push <<<

@@ -57,6 +57,7 @@
 - `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
 - `scripts/check_codex_hooks.py` — check_codex_hooks.py — Codex フック設定とアダプタの回帰検査（契約: .guardrails/GUARDRAILS.md §2）
 - `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
+- `scripts/check_fill_bindings.py` — check_fill_bindings.py — fill_bindings の失敗時無変更・正常充填を回帰検査する
 - `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
 - `scripts/check_ownership_guard.py` — check_ownership_guard.py — 所有権ガード(§2c)の回帰シナリオ再生（契約: .guardrails/GUARDRAILS.md §2c）
 - `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: .guardrails/GUARDRAILS.md §5）
@@ -82,7 +83,10 @@
 
 - `tests/guard_corpus.tsv`
 - `tests/injections/common.json`
+- `tests/injections/dart-flutter.json`
 - `tests/injections/python-uv.json`
+- `tests/injections/rust.json`
+- `tests/injections/ts-react-web.json`
 
 ## 公開シンボル
 
@@ -165,6 +169,10 @@
 - def main_history
 - def main
 
+### `scripts/check_fill_bindings.py`
+- def run
+- def main
+
 ### `scripts/check_guard_corpus.py`
 - def resolve_tool
 - def run_guard
@@ -238,7 +246,10 @@
 
 ### `scripts/fill_bindings.py`
 - def column_section
+- def split_target
+- def region_inner
 - def fill_one
+- def validate_target
 - def stamp_primary
 - def main
 
@@ -249,6 +260,7 @@
 ### `scripts/install_kit.py`
 - def is_meta
 - def managed_inner
+- def named_managed_inner
 - def splice_managed
 - def diff_stat
 - def detect

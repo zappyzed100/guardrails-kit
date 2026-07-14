@@ -67,9 +67,19 @@ def is_meta(rel: str) -> bool:
     return rel in META_FILES or rel.startswith(("surveys/", "docs/plans/")) or (
         "/" not in rel and (rel.startswith("README") or rel.startswith("PROMPT_"))
     ) or rel == ".guardrails/violations.jsonl" or rel.startswith(
-        (".claude/session/", ".codex/session/")
-    )
-EXCLUDE_DIRS = {".git", "__pycache__"}
+        (".claude/session/", ".codex/session/", ".claude/routines/.state/",
+         ".claude/worktrees/", ".claude/checkpoints/", ".claude/mailbox/")
+    ) or rel in {
+        ".claude/scheduled_tasks.lock", ".claude/scheduled_tasks.json",
+        ".claude/agent-registry.json", ".claude/agent-memory-local",
+        ".claude/first-run", ".claude/assistant-daemon-state.json",
+    }
+# 作業チェックアウトから直接導入しても、言語ツールの生成キャッシュを配布しない。
+# zip配布では通常含まれないため、直インストール経路でだけ混入する差をここで消す。
+EXCLUDE_DIRS = {
+    ".git", "__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_cache",
+    ".coverage", "htmlcov", ".venv", "node_modules", "target", "build", "dist",
+}
 
 # --- キット系統の判定シグネチャ（UPGRADED 可否。全キットファイルが最低1つ含む）---
 KIT_SIGNATURES = ("GUARDRAILS", "guardrails", "BINDING", "guard_git_bypass")
@@ -93,6 +103,8 @@ MANAGED_FILES = {
     "scripts/dev.py",
     ".claude/hooks/post_edit_format.py",
     ".claude/hooks/post_edit_lint.py",
+    ".pre-commit-config.yaml",
+    ".github/workflows/guardrails-ci.yml",
 }
 
 
@@ -109,13 +121,42 @@ def managed_inner(text: str) -> tuple[int, int] | None:
     return (start, e) if start <= e else None
 
 
+def named_managed_inner(text: str, name: str) -> tuple[int, int] | None:
+    """YAML等の複数貼り先用に、名前付き管理区画の内側を返す。"""
+    begin = f"# >>> GUARDRAILS BINDING: {name} >>>"
+    end = f"# <<< GUARDRAILS BINDING: {name} <<<"
+    if text.count(begin) != 1 or text.count(end) != 1:
+        return None
+    b, e = text.find(begin), text.find(end)
+    if e < b:
+        return None
+    nl = text.find("\n", b)
+    start = nl + 1 if nl != -1 else len(text)
+    return (start, e) if start <= e else None
+
+
 def splice_managed(src_text: str, dst_text: str) -> str | None:
     """新版 src の区画の中身を、既存 dst の区画の中身で置き換えた全文を返す。"""
-    s = managed_inner(src_text)
-    d = managed_inner(dst_text)
-    if s is None or d is None:
-        return None
-    return src_text[: s[0]] + dst_text[d[0]: d[1]] + src_text[s[1]:]
+    names = re.findall(r"# >>> GUARDRAILS BINDING: ([A-Za-z0-9_.-]+) >>>", src_text)
+    if names:
+        result = src_text
+        for name in names:
+            s = named_managed_inner(result, name)
+            d = named_managed_inner(dst_text, name)
+            if s is None or d is None:
+                return None
+            result = result[:s[0]] + dst_text[d[0]:d[1]] + result[s[1]:]
+    else:
+        s = managed_inner(src_text)
+        d = managed_inner(dst_text)
+        if s is None or d is None:
+            return None
+        result = src_text[:s[0]] + dst_text[d[0]:d[1]] + src_text[s[1]:]
+    # YAML の刻印は区画外のヘッダーにある。既存の実IDを新版プレースホルダへ戻さない。
+    stamp = re.search(r"BINDING-SOURCE:\s*([A-Za-z0-9][A-Za-z0-9_.-]*@[0-9]+)", dst_text)
+    if stamp:
+        result = re.sub(r"BINDING-SOURCE:\s*<[^\n]*", f"BINDING-SOURCE: {stamp.group(1)}", result, count=1)
+    return result
 
 
 def diff_stat(old: str, new: str) -> str:
@@ -179,7 +220,7 @@ def detect(target: Path) -> int:
 # 漏れ自体はキット原本の `installer-token-drift`（check-structure・hard）が機械検出する（§3.3）。
 PRECOMMIT_REQUIRED = [
     "gitleaks", "generate-structure", "check-structure", "check-commit-msg",
-    "guard-corpus", "ownership-guard", "codex-hooks", "check-bootstrap",
+    "guard-corpus", "rule-dod", "fill-bindings-corpus", "ownership-guard", "codex-hooks", "check-bootstrap",
     "bootstrap-verify-scenarios", "default_stages",
 ]
 

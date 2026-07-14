@@ -50,12 +50,14 @@ COMMANDS: dict[str, list[list[str]] | None] = {
              #   `probe --live` は実ホスト経路の発火確認（§2・Phase 44——main で分岐）
     "db":    None,   # ローカルDBへの読み取りクエリ（例: dev.py db "select count(*) from x"）
     "selftest": [["uv", "run", "scripts/check_guard_corpus.py"],
-                 ["uv", "run", "scripts/check_ownership_guard.py"],
-                 ["uv", "run", "scripts/check_codex_hooks.py"]],
+                  ["uv", "run", "scripts/check_ownership_guard.py"],
+                  ["uv", "run", "scripts/check_codex_hooks.py"],
+                  ["uv", "run", "scripts/check_fill_bindings.py"],
+                  ["uv", "run", "scripts/check_rule_dod.py"]],
              # ↑ 門の違反注入コーパス一括（門のテスト — §2。言語なしで即動く・Phase 44）
     "dod":   [["uv", "run", "scripts/check_rule_dod.py", "{args}"]],
              # ↑ 列の違反注入コーパス再生（規則DoDの機械化 — §11 Step 2・Phase 47。
-             #   コーパス未同梱の列では表示つき素通し）
+             #   採用列のコーパス未同梱は未完了としてexit 1）
 }
 
 # >>> GUARDRAILS BINDING >>>

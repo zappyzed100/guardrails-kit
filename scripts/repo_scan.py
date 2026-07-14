@@ -484,8 +484,10 @@ REQUIRED_PATHS = [
     "scripts/install_kit.py", "scripts/check_guard_corpus.py",
     "scripts/check_red_first.py", "scripts/check_bootstrap.py",
     "scripts/check_codex_hooks.py",
-    "scripts/fill_bindings.py", "scripts/check_rule_dod.py",
-    "tests/guard_corpus.tsv",
+    "scripts/fill_bindings.py", "scripts/check_fill_bindings.py", "scripts/check_rule_dod.py",
+    "tests/guard_corpus.tsv", "tests/injections/common.json",
+    "tests/injections/ts-react-web.json", "tests/injections/python-uv.json",
+    "tests/injections/dart-flutter.json", "tests/injections/rust.json",
 ]
 
 # --- キット原本自身の判定（§3.3 kit-source-exempt — v2.14・Phase 27）---
