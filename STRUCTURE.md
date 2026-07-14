@@ -20,7 +20,7 @@
 
 ## `.claude/`
 
-- `.claude/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
+- `.claude/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回・.git/hooks/ シムの改変除去、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
 - `.claude/hooks/guard_human_wip.py` — guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: .guardrails/GUARDRAILS.md §2c）
 - `.claude/hooks/post_edit_format.py` — post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: .guardrails/GUARDRAILS.md §1）
 - `.claude/hooks/post_edit_lint.py` — post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: .guardrails/GUARDRAILS.md §1）
@@ -81,6 +81,7 @@
 ## `tests/`
 
 - `tests/guard_corpus.tsv`
+- `tests/injections/common.json`
 - `tests/injections/python-uv.json`
 
 ## 公開シンボル

@@ -1,4 +1,4 @@
-# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
+# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回・.git/hooks/ シムの改変除去、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
 #
 # 呼び出し（PreToolUse: Bash。settings.json 側で `uv run python` 経由——§7.1）。
 # PreToolUse(Bash) の仕様: ブロックできるのは exit 2 **だけ**（exit 1 含む他の非0は素通し）。
@@ -52,6 +52,13 @@ WORD_RESTORE = _word("restore")
 
 RE_HOOKSPATH = re.compile("hookspath", re.IGNORECASE)
 RE_GIT_CONFIG_GET = re.compile(r"--get(-all|-regexp)?\b")
+# フックシムの改変/除去（v2.46 — §2）: `.git/hooks/` 配下のシムを rm/mv/chmod/ln/tee で
+# 消す・無効化する、または `>`（切り詰め）で潰す操作。`pre-commit uninstall` と同じ全ゲート
+# 迂回だが「uninstall」の語を使わない経路（`rm .git/hooks/pre-commit` 等）が素通しだった。
+# 参照だけ（cat / ls）は素通し——変異動詞か切り詰めリダイレクトを伴う時のみブロック。
+RE_HOOKS_SHIM = re.compile(r"\.git/hooks/")
+RE_HOOK_MUTATE = re.compile(r"\b(?:rm|mv|chmod|ln|tee|truncate)\b")
+RE_HOOK_REDIRECT = re.compile(r">\s*\.git/hooks/")
 CMD_SPLIT = re.compile(r"&&|\|\||;|\|")
 RE_SKIP = re.compile(r"(^|[;&|\s])SKIP=")
 RE_NFLAG = re.compile(r"(^|\s)-[a-mo-zA-Z]*n[a-zA-Z]*(\s|$)")
@@ -124,6 +131,17 @@ def check(cmd: str) -> None:
     # 主防壁の責務（--force と同じ二重構造）。
     if WORD_PRECOMMIT.search(stripped) and WORD_UNINSTALL.search(stripped):
         block("pre-commit uninstall（フックシムの取り外し）")
+
+    # 全フック迂回: シムの直接改変/除去（v2.46）。`pre-commit uninstall` を使わずに
+    # `.git/hooks/` 配下のシムを消す・上書きする・無効化する経路を塞ぐ。参照（cat/ls）は
+    # 通し、変異動詞（rm/mv/chmod/ln/tee/truncate）か切り詰めリダイレクト（`> .git/hooks/…`）
+    # を伴う時だけブロックする。`pre-commit install`（語に .git/hooks/ を含まない正規の
+    # 再導入）は素通し。
+    for seg in segments:
+        if RE_HOOK_REDIRECT.search(seg) or (
+            RE_HOOKS_SHIM.search(seg) and RE_HOOK_MUTATE.search(seg)
+        ):
+            block(".git/hooks/ 配下のフックシムの改変/除去（pre-commit uninstall と同じ全ゲート迂回）")
 
     for seg in segments:
         if WORD_GIT.search(seg) and WORD_COMMIT_PUSH.search(seg):
