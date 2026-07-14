@@ -49,6 +49,10 @@
 
 - `bindings/catalog.md`
 
+## `docs/`
+
+- `docs/plans/2026-07-14-harness-tools-import.md`
+
 ## `scripts/`
 
 - `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
@@ -221,6 +225,10 @@
 
 ### `scripts/install_kit.py`
 - def is_meta
+- def managed_inner
+- def splice_managed
+- def diff_stat
+- def detect
 - def read_text
 - def kit_lines
 - def lines_present

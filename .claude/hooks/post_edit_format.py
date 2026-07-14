@@ -24,9 +24,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# >>> GUARDRAILS BINDING >>>
 # 拡張子 → 整形コマンド（argv のリストのリスト・順に実行）。空 = キット出荷時の既定。
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "format", "{file}"]]
+# 採用列の paste-block はこの区画内へ。更新はこの区画の中身だけ引き継がれる（Phase 44）。
 DISPATCH: dict[str, list[list[str]]] = {}
+# <<< GUARDRAILS BINDING <<<
 
 
 def main() -> int:

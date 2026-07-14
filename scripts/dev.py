@@ -14,19 +14,20 @@
 #   - 出力は `[dev] 動詞: コマンド` → 実行 → `[dev] 動詞: exit N (+Xms)`（ログ形式 — AGENTS.md §7）。
 #   - COMMANDS が None の動詞は「未配線」を明示して落ちる（静かに何もしない fail-open の禁止）。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
-#
 # ===== BINDING: 動詞 → コマンド列（bindings/catalog.md の採用列から充填する）=====
 # 値は「argv のリスト」のリスト（shell=False で順に実行・非0で中断 — §7.2）。
 # 引数を受ける動詞は "{args}" トークンの位置に呼び出し引数が展開される。
 # トークンが無いのに引数が来た場合は末尾に連結される。
+# 充填は下の管理区画（>>> GUARDRAILS BINDING >>>）内で COMMANDS.update({...}) で行う。
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -46,8 +47,20 @@ COMMANDS: dict[str, list[list[str]] | None] = {
               ["uv", "run", "scripts/check_codex_hooks.py"]],  # 構造・Codexフック検査
     "probe": [["uv", "run", "scripts/check_guard_corpus.py", "--probe", "{args}"]],
              # ↑ 迂回防止の事前照会（言語なしで即動く — §2。「試して exit 2」の1周を削る）
+             #   `probe --live` は実ホスト経路の発火確認（§2・Phase 44——main で分岐）
     "db":    None,   # ローカルDBへの読み取りクエリ（例: dev.py db "select count(*) from x"）
+    "selftest": [["uv", "run", "scripts/check_guard_corpus.py"],
+                 ["uv", "run", "scripts/check_ownership_guard.py"],
+                 ["uv", "run", "scripts/check_codex_hooks.py"]],
+             # ↑ 門の違反注入コーパス一括（門のテスト — §2。言語なしで即動く・Phase 44）
 }
+
+# >>> GUARDRAILS BINDING >>>
+# 採用列の充填は**この区画内**で行う（例: COMMANDS.update({"up": [["supabase", "start"]]})
+# ——全置換 `COMMANDS = {...}` は既定配線（check/probe/selftest）を消すため禁止・加算形のみ）。
+# インストーラの更新（UPGRADED）はこの区画の中身だけを既存から引き継ぐ（Phase 44）。
+# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# <<< GUARDRAILS BINDING <<<
 
 VERB_HELP: dict[str, str] = {
     "up": "ローカル環境を起動する（冪等）",
@@ -58,9 +71,87 @@ VERB_HELP: dict[str, str] = {
     "e2e": "E2Eテストを実行する（操作レール — §12.4）",
     "fmt": "コード整形を実行する（冪等）",
     "check": "構造検査を実行する（§3.3）",
-    "probe": "コマンドが迂回防止（§2）に通るか事前照会する（引数: コマンド文字列1つ）",
+    "probe": "コマンドが迂回防止（§2）に通るか事前照会する（引数: コマンド文字列1つ。--live で実ホスト経路の発火確認）",
     "db": "ローカルDBへ読み取りクエリを投げる（観察レール — §12.3）",
+    "selftest": "門の違反注入コーパスを一括再生する（門のテスト — §2）",
+    "doctor": "環境診断（ツール・シム・フック配線の集約表示 → check を実行）",
 }
+
+
+def _doctor(root: Path) -> int:
+    """環境診断の集約フロント（Phase 44）。既存検査の呼び出しと事実の表示に限定——
+    新しい検査は作らない（重複実装の禁止 — §7.3。検査の正本は check の2スクリプト）。"""
+    import platform
+    print("[dev] doctor: 環境診断（事実の表示 → check 実行）")
+    facts: list[tuple[str, str]] = [("python", platform.python_version())]
+    for tool in ("uv", "git", "pre-commit"):
+        facts.append((tool, shutil.which(tool) or "見つからない"))
+    facts.append(("core.hooksPath", rs.git_config_get(root, "core.hooksPath")
+                  or "(未設定=正常 — §3.3 hooks-path-overridden)"))
+    try:
+        hooks_dir = rs.git_hooks_dir(root)
+        shims = [n for n in ("pre-commit", "commit-msg", "pre-push")
+                 if (hooks_dir / n).exists()]
+        facts.append(("pre-commit シム", ", ".join(shims) or "無し（Step 3 未実施 — §0）"))
+    except rs.ScanError as exc:
+        facts.append(("pre-commit シム", f"判定不能: {exc}"))
+    settings = root / ".claude" / "settings.json"
+    if settings.is_file():
+        try:
+            with open(settings, encoding="utf-8") as f:
+                hooks = json.load(f).get("hooks", {})
+            facts.append((".claude/settings.json hooks",
+                          ", ".join(sorted(hooks)) or "配線なし"))
+        except (ValueError, OSError):
+            facts.append((".claude/settings.json hooks", "JSON 解釈不能"))
+    else:
+        facts.append((".claude/settings.json", "無し"))
+    ledger = root / rs.VIOLATION_LEDGER_REL
+    if ledger.is_file():
+        with open(ledger, encoding="utf-8", errors="replace") as f:
+            n = sum(1 for _ in f)
+        facts.append(("違反ログ（§3.6）", f"{n} 行"))
+    else:
+        facts.append(("違反ログ（§3.6）", "無し（まだ違反が記録されていない）"))
+    for key, value in facts:
+        print(f"[dev] doctor: {key}: {value}")
+    return main(["check"])
+
+
+def _probe_live(root: Path) -> int:
+    """実ホスト経路の発火確認（Phase 44 — agent-guard 型の sentinel。§2）。
+
+    コーパス再生（同じ stdin 形式でフックを呼ぶ）が証明しないもの——「実セッションで
+    ハーネスが本当に PreToolUse を発火させるか」——を、nonce 入り sentinel 違反の
+    ブロックが違反ログ（§3.6）に記録されたことで機械確認する。2段階:
+    1回目=発行（exit 1）→ エージェントが sentinel 実行（ブロックが正）→ 2回目=判定。
+    """
+    session_dir = root / ".claude" / "session"
+    nonce_file = session_dir / "live_probe_nonce"
+    ledger = root / rs.VIOLATION_LEDGER_REL
+    if nonce_file.is_file():
+        nonce = nonce_file.read_text(encoding="utf-8").strip()
+        if ledger.is_file() and nonce in ledger.read_text(encoding="utf-8", errors="replace"):
+            nonce_file.unlink()
+            print(f"[dev] probe --live: PASS — sentinel（{nonce}）のブロックが違反ログに"
+                  "記録済み＝実ホスト経路でフックが発火している（§2・Step 4/8b DoD）")
+            return 0
+        print("[dev] probe --live: 未記録。エージェントの**セッション内**で次を実行してから"
+              "再実行する（ブロックされるのが正）:", file=sys.stderr)
+        print(f'  git commit --no-verify --allow-empty -m "{nonce}"', file=sys.stderr)
+        print("  ※人間の端末では実行しない（フックが無いため空コミットが実際に作られる）",
+              file=sys.stderr)
+        return 1
+    nonce = f"GUARDRAILS-LIVE-PROBE-{uuid.uuid4().hex[:12]}"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    with open(nonce_file, "w", encoding="utf-8", newline="\n") as f:
+        f.write(nonce + "\n")
+    print("[dev] probe --live: sentinel を発行した。エージェントの**セッション内**で次を実行"
+          "（PreToolUse がブロックするのが正——実コミットは作られない）:")
+    print(f'  git commit --no-verify --allow-empty -m "{nonce}"')
+    print("[dev] probe --live: 実行後にもう一度 `uv run scripts/dev.py probe --live` で判定"
+          "（PASS が Step 4/8b の DoD — §2）。※人間の端末では実行しない")
+    return 1
 
 
 def _splice(cmd: list[str], args: list[str]) -> list[str]:
@@ -79,7 +170,8 @@ def _print_verbs() -> None:
     print("[dev] 動詞一覧（意味論は全プロジェクト共通・配線は bindings/catalog.md の採用列 — §12.1）")
     for verb in COMMANDS:
         wired = "配線済み" if COMMANDS[verb] else "未配線"
-        print(f"  {verb:<6} {wired:<4}  {VERB_HELP.get(verb, '')}")
+        print(f"  {verb:<8} {wired:<4}  {VERB_HELP.get(verb, '')}")
+    print(f"  {'doctor':<8} 内蔵    {VERB_HELP['doctor']}")
 
 
 def main(argv: list[str]) -> int:
@@ -88,6 +180,10 @@ def main(argv: list[str]) -> int:
         _print_verbs()
         return 0
     verb, args = argv[0], argv[1:]
+    if verb == "doctor":
+        return _doctor(rs.repo_root())
+    if verb == "probe" and args == ["--live"]:
+        return _probe_live(rs.repo_root())
     if verb not in COMMANDS:
         print(f"[dev] 不明な動詞: {verb!r}（`uv run scripts/dev.py verbs` で一覧 — §12.1）",
               file=sys.stderr)

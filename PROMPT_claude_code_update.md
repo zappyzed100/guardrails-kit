@@ -45,8 +45,11 @@
   して再実行（冪等）。**exit 0 になるまで Step U2 へ進まない**。
 - **Step U2（消えた充填の復元）**: `git diff` で UPGRADED による消失分を確認し、
   旧版の内容（`git show HEAD:<path>`）から**採用先ローカル部だけ**を新版ファイルへ
-  再適用する。対象の典型: `scripts/repo_scan.py` の BINDING 充填と `BINDING-SOURCE` 刻印・
-  `scripts/dev.py` の COMMANDS・`guardrails-ci.yml` の列ジョブ・
+  再適用する。**v2.42 から Python 充填先4ファイル（repo_scan / dev / post_edit_format /
+  post_edit_lint）は管理区画スプライスで自動継承される**（充填が区画
+  `>>> GUARDRAILS BINDING >>>` の内側にあれば復元作業ゼロ。区画の外に貼られた旧充填は
+  `CONFLICT:unmarked-binding` で止まる——その場合だけ、充填を区画内へ移してから
+  install_kit.py を再実行する）。手動復元が残る対象: `guardrails-ci.yml` の列ジョブ・
   `.guardrails/GUARDRAILS.md` §10 の**自リポジトリの状態記録**（清掃 Phase・保留・✅）。
   **復元の向きを間違えないこと**: 新版ファイルを土台に旧充填を移植する。旧ファイルの
   区画を丸ごと戻すのは禁止——新版で増えたスロット（BINDING の新変数等）が消えると

@@ -657,3 +657,9 @@ BINDING_STAMP_FILES = [
     ".claude/hooks/post_edit_format.py",
     ".claude/hooks/post_edit_lint.py",
 ]
+
+# >>> GUARDRAILS BINDING >>>
+# 採用列の paste-block は**この区画内**へ貼る（bindings/catalog.md — §12.7）。
+# インストーラの更新（UPGRADED）はこの区画の中身だけを既存から引き継ぐ（§11 前段・Phase 44）。
+# 刻印（BINDING-SOURCE の行 — §12.7）もこの区画内に書く。
+# <<< GUARDRAILS BINDING <<<
