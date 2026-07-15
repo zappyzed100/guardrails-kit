@@ -16,6 +16,8 @@
 このリポジトリに導入済みのガードレール・キットを、ルートに置かれた新版 zip の内容へ更新する。
 契約の正本は更新**後**の `.guardrails/GUARDRAILS.md`。以下の Step U0〜U6 を順に実行し、
 途中でターンを終えない。物理的ブロッカーは応答の先頭を `BLOCKED:` で始めて報告する。
+更新開始前に既定ブランチから更新専用ブランチを作り、**更新も必ずPR経由**で合流する。
+既定ブランチへの直接 push はしない。
 
 ## 前提（この更新方式が成立する理由）
 
@@ -53,11 +55,11 @@
   後片付け（全 OK/KEPT・zip と展開元の自動削除）。ここまで済むまで Step U2 へ進まない。
 - **Step U2（消えた充填の復元）**: `git diff` で UPGRADED による消失分を確認し、
   旧版の内容（`git show HEAD:<path>`）から**採用先ローカル部だけ**を新版ファイルへ
-  再適用する。**v2.42 から Python 充填先4ファイル（repo_scan / dev / post_edit_format /
-  post_edit_lint）は管理区画スプライスで自動継承される**（充填が区画
+  再適用する。**Python 4ファイルに加え `.pre-commit-config.yaml` / `guardrails-ci.yml` も
+  管理区画スプライスで自動継承される**（充填が区画
   `>>> GUARDRAILS BINDING >>>` の内側にあれば復元作業ゼロ。区画の外に貼られた旧充填は
   `CONFLICT:unmarked-binding` で止まる——その場合だけ、充填を区画内へ移してから
-  install_kit.py を再実行する）。手動復元が残る対象: `guardrails-ci.yml` の列ジョブ・
+  install_kit.py を再実行する）。手動復元が残る対象は
   `.guardrails/GUARDRAILS.md` §10 の**自リポジトリの状態記録**（清掃 Phase・保留・✅）。
   **復元の向きを間違えないこと**: 新版ファイルを土台に旧充填を移植する。旧ファイルの
   区画を丸ごと戻すのは禁止——新版で増えたスロット（BINDING の新変数等）が消えると
@@ -85,10 +87,15 @@
   guard コーパス・所有権ガード・Codex フック） ④ フック層のファイルが UPGRADED された
   場合は `uv run scripts/dev.py probe --live` で実経路の発火を再実測（更新でフックが
   静かに死んでいないことの確認） ⑤ 既存テスト一式。
-- **Step U6（コミット）**: 原則1コミット（大きければ「機械配置＋復元」と「新しい門の
+- **Step U6（コミット＋PR）**: 原則1コミット（大きければ「機械配置＋復元」と「新しい門の
   DoD」の2つまで）。件名: `chore: ガードレールキット更新（Phase <旧最大>→<新最大>）`。
   本文: 効くG（例: G13）・UPGRADED/CONFLICT 解消の要約・復元した充填の一覧・
-  新しい門ごとの DoD 結果1行。**push はユーザーに確認してから**。
+  新しい門ごとの DoD 結果1行。更新ブランチをpushしてPRを作り、全required checksが緑に
+  なるまで直す。`guardrails-trusted.yml` / `check_workflow_integrity.py` / `guardrails-ci.yml` /
+  `.github/CODEOWNERS`
+  （信頼の根）自体の
+  更新を含む版だけは、PRを人間がレビュー後、`workflow-integrity` のrequired指定を一時解除して
+  **同じPRを**マージし、直ちにrequiredへ戻す（直接pushで更新しない）。
 
 ## 絶対規則
 

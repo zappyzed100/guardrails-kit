@@ -17,6 +17,7 @@
 - 中核不変条件: ★（壊れたら致命の性質。分かる範囲で — §12.6）
 - 外部I/O一覧: ★（分かる範囲で。Step -1b の棚卸しで補完される — §9.5）
 - GitHub リモート URL: ★（Step 9 の CI 実測に必要）
+- workflow信頼境界の人間CODEOWNER: ★（PR作成者とは別のGitHubユーザー/チーム。AI/アプリ不可）
 - 特記事項: ★（無ければ「なし」）
 
 ## 任務
@@ -166,7 +167,12 @@ Edit|Write|MultiEdit の2 matcher）/ Stop / SessionStart の4キー**と `permi
   ここで修正してから規則を有効化する（修正が大きければ Step 0 の判定表どおり Phase 分割）。
 - **Step 9（CI）**: 既存ワークフローがあれば checks ジョブ等を**既存へ統合**し、重複実行を
   作らない。無ければ `guardrails-ci.yml` をそのまま使う。DoD は新規用と同じ
-  （正常 PR 緑＋ Web エディタからの違反 PR が赤＋検証ブランチ削除）。
+  （正常 PR 緑＋ Web エディタからの違反 PR が赤＋検証ブランチ削除）。PR必須・bypassなし、
+  4コアjob（`checks` / `red-first` / `commit-msg-history` / `workflow-integrity`）と採用した
+  全言語別jobのrequired登録、CODEOWNERS placeholder置換、workflow群・integrity検査器・
+  CODEOWNERS自身へのcode owner review必須化まで実測する。required checkの期待送信元は
+  全てGitHub Actions Appに固定し、`any source`にしない。
+  `dismiss stale reviews` または `require last push approval` も有効にする。
 - **Step 10（総合監査）**: 新規用の監査に加えて、①一時停止中の規則が「BINDING のコメント
   ⇔ §10 の Phase」で1対1に対応している（片方だけの幽霊猶予が無い）②清掃済み Phase の規則が
   実際に有効で違反注入で落ちる ③棚卸しレポートの違反件数と現在値の差分（何件解消し、

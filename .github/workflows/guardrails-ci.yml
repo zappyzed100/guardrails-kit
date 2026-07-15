@@ -1,4 +1,4 @@
-# guardrails-ci.yml — 最終防衛線: ローカルフックと同一の検査を PR / main push で必ず再実行（正本: .guardrails/GUARDRAILS.md §5）
+# guardrails-ci.yml — 最終防衛線: ローカルフックと同一の検査を PR / push で必ず再実行（正本: .guardrails/GUARDRAILS.md §5）
 #
 # ローカルの git フックは原理的に迂回できる（別マシン・Web エディタ等）ため、
 # checks ジョブは .pre-commit-config.yaml と全く同じ定義をそのまま再実行する
@@ -12,7 +12,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:

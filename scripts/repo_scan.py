@@ -79,6 +79,41 @@ def read_text(root: Path, rel: str) -> str:
         return f.read()
 
 
+def yaml_top_block(text: str, key: str) -> list[str]:
+    """依存追加なしで top-level YAML mapping の本文行を返す。
+
+    GitHub workflow の job ID 抽出に使う限定パーサ。top-level ``key:`` から次の
+    非コメント top-level key 直前までだけを切り出すため、``on.push`` 等の同じ2空白キーを
+    job と誤認しない。YAML 全般を解釈する関数ではない（§7.4 の限定近似）。
+    """
+    lines = text.splitlines()
+    start = next((i + 1 for i, line in enumerate(lines)
+                  if re.fullmatch(rf"{re.escape(key)}:\s*(?:#.*)?", line)), None)
+    if start is None:
+        return []
+    out: list[str] = []
+    for line in lines[start:]:
+        if line and not line[0].isspace() and not line.lstrip().startswith("#"):
+            break
+        out.append(line)
+    return out
+
+
+def workflow_job_blocks(text: str) -> dict[str, str]:
+    """workflow の ``jobs:`` 直下だけから job ID と本文を抽出する。"""
+    lines = yaml_top_block(text, "jobs")
+    starts: list[tuple[int, str]] = []
+    for i, line in enumerate(lines):
+        m = re.fullmatch(r"  ([A-Za-z][\w-]*):\s*(?:#.*)?", line)
+        if m:
+            starts.append((i, m.group(1)))
+    blocks: dict[str, str] = {}
+    for n, (start, name) in enumerate(starts):
+        end = starts[n + 1][0] if n + 1 < len(starts) else len(lines)
+        blocks[name] = "\n".join(lines[start:end])
+    return blocks
+
+
 VIOLATION_LEDGER_REL = ".guardrails/violations.jsonl"
 
 
@@ -478,11 +513,12 @@ REQUIRED_PATHS = [
     ".claude/hooks/post_edit_lint.py", ".claude/hooks/stop_incomplete_guard.py",
     ".claude/hooks/session_baseline.py", ".claude/hooks/guard_human_wip.py",
     ".codex/hooks.json", ".codex/hooks/codex_hook_adapter.py",
-    ".github/workflows/guardrails-ci.yml",
+    ".github/CODEOWNERS", ".github/workflows/guardrails-ci.yml",
+    ".github/workflows/guardrails-trusted.yml",
     "scripts/repo_scan.py", "scripts/generate_structure.py",
     "scripts/check_structure.py", "scripts/check_commit_msg.py", "scripts/dev.py",
     "scripts/install_kit.py", "scripts/check_guard_corpus.py",
-    "scripts/check_red_first.py", "scripts/check_bootstrap.py",
+    "scripts/check_red_first.py", "scripts/check_bootstrap.py", "scripts/check_workflow_integrity.py",
     "scripts/check_codex_hooks.py",
     "scripts/fill_bindings.py", "scripts/check_fill_bindings.py", "scripts/check_rule_dod.py",
     "tests/guard_corpus.tsv", "tests/injections/common.json",
@@ -727,6 +763,7 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("missing-folder-claude-md", "§3.3 コミット時", "var:REQUIRED_SOFT_PATHS", "レイヤーCLAUDE.md の欠落警告（soft）"),
     ("orphan-file", "§3.3 コミット時", "var:ORPHAN_UNIVERSES", "どこからも import されない孤立ファイル警告（soft）"),
     ("gates-registry-drift", "§3.3 コミット時", "always", "この台帳自体と検査器コードの不一致検出（台帳の門）"),
+    ("phase-table-drift", "§10 コミット時", "always", "Phase台帳とPhase見出しの不一致検出"),
     # --- §3.4 commit-msg 検査 ---
     ("commit-msg-format", "§3.4 コミット時", "always", "コミットメッセージ形式（feat|fix|test|docs|refactor|chore:）"),
     ("fix-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS",
