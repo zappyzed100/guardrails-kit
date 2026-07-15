@@ -277,6 +277,7 @@
 ### `scripts/install_kit.py`
 - def is_meta
 - def kit_source_rel
+- def splice_codeowners
 - def managed_inner
 - def named_managed_inner
 - def splice_managed

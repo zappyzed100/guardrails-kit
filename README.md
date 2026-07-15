@@ -68,6 +68,7 @@ push→CI の全工程で、**検査自身の検証**（違反注入・門番の
 checkはworkflowを識別せずjob名だけを見るため、`.github/CODEOWNERS` とサーバー側の
 code owner review必須化も併用し、workflowだけでなくPR headで実行するゲート設定・スクリプト・
 コーパスの骨抜きと、同名ダミーjobによる偽装を人間境界で止めます。
+Step 9はGitHubのCODEOWNERS errors APIも実測し、ownerの不存在・write権限不足を検出します。
 一人開発では「人間を2人」にする必要はありません。本人をCODEOWNERにし、PR作成だけを
 権限を絞ったmachine user/GitHub Appへ分離します。AIへ本人のowner資格情報は渡しません。
 PR は、Web 編集やフック未導入マシンの変更を既定ブランチへ入る**前**に止める境界です。

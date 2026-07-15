@@ -215,6 +215,14 @@ def check_codeowners_source_template(
     placeholder = "@GUARDRAILS-HUMAN-REVIEWER"
     source = rs.read_text(root, source_rel)
     template = rs.read_text(root, template_rel)
+    begin = "# >>> GUARDRAILS CODEOWNERS >>>"
+    end = "# <<< GUARDRAILS CODEOWNERS <<<"
+    if template.count(begin) != 1 or template.count(end) != 1 or not template.rstrip().endswith(end):
+        out.append(("HARD", "codeowners-source-template", template_rel,
+                    "配布用CODEOWNERS管理区画が一意でないか、後勝ちを保証する末尾配置でない"))
+    if source.count(begin) != 1 or source.count(end) != 1:
+        out.append(("HARD", "codeowners-source-template", source_rel,
+                    "配布元CODEOWNERSの管理区画マーカーが一意でない"))
     if placeholder in source:
         out.append(("HARD", "codeowners-source-template", source_rel,
                     "キット原本の実効 CODEOWNERS に配布用 placeholder が残っている"))
