@@ -71,6 +71,7 @@ code owner review必須化も併用し、workflowだけでなくPR headで実行
 Step 9はGitHubのCODEOWNERS errors APIも実測し、ownerの不存在・write権限不足を検出します。
 一人開発では「人間を2人」にする必要はありません。本人をCODEOWNERにし、PR作成だけを
 権限を絞ったmachine user/GitHub Appへ分離します。AIへ本人のowner資格情報は渡しません。
+全PRで承認1件を要求し、ゲート関連パスではCODEOWNER承認も追加で要求します。
 PR は、Web 編集やフック未導入マシンの変更を既定ブランチへ入る**前**に止める境界です。
 `push` の CI は合流後の異常検知であり、この予防を代替しません。
 

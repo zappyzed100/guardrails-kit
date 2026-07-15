@@ -9,8 +9,10 @@
 - `.guardrails-kit-source`
 - `.pre-commit-config.yaml`
 - `.python-version`
+- `AGENTS.md`
 - `AGENTS.md.template`
 - `CLAUDE.md.template`
+- `PLAN.md`
 - `PROMPT_claude_code.md`
 - `PROMPT_claude_code_existing.md`
 - `PROMPT_claude_code_update.md`
@@ -55,6 +57,7 @@
 
 - `docs/plans/2026-07-14-harness-tools-import.md`
 - `docs/plans/2026-07-15-test-log-3layer-rails.md`
+- `docs/plans/PLAN_FORMAT.md`
 
 ## `scripts/`
 
@@ -277,6 +280,7 @@
 ### `scripts/install_kit.py`
 - def is_meta
 - def kit_source_rel
+- def kit_source_files
 - def splice_codeowners
 - def managed_inner
 - def named_managed_inner

@@ -30,6 +30,43 @@
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 | 導入済みリポジトリの新版更新 | `PROMPT_claude_code_update.md` | インストーラ再実行（UPGRADED——git 履歴が安全網）→ 消えた充填を履歴から復元 → §10 の Phase 見出し diff で新しい門を列挙 → 門ごとに違反注入 DoD |
 
+## v2.59 での変更点（インストーラのGit index隔離。根拠は `.guardrails/GOALS.md` の G1/G7/G9）
+
+- 呼出元の`GIT_INDEX_FILE`が直インストールへ混入し、別repositoryの追跡集合を配布する欠陥を修正。
+- kitマニフェスト取得とfixture Git操作は対象repository自身のindexだけを使う。
+- 一時indexを使う全pre-commit走査でも未追跡ファイル非流出テストが通ることを確認する。
+
+## v2.58 での変更点（classic required checksのadmin適用監査。根拠は `.guardrails/GOALS.md` の G7/G9/G10）
+
+- 旧来ブランチ保護からrequired checksを採る場合も`enforce_admins=true`を必須化した。
+- PRレビュー設定が別rulesetにある構成でも、classic checksのadmin迂回を見逃さない。
+- classic checksだけadmin非適用の分離シナリオを追加した。
+
+## v2.57 での変更点（required checks側rulesetのbypass監査。根拠は `.guardrails/GOALS.md` の G7/G9/G10）
+
+- PRルールだけでなく、required status checksを定義したruleset自身のbypass actorも検査する。
+- bypassなしと確認できたruleset由来のcontextだけをrequired checks登録済みとして数える。
+- status側だけbypassあり・PR側は安全、という分離構成の違反注入を追加した。
+
+## v2.56 での変更点（全PRの人間承認境界。根拠は `.guardrails/GOALS.md` の G7/G9/G10）
+
+- code owner対象外の通常変更がmachine userだけでmergeできた穴を修正し、全PRで承認1件以上を要求。
+- ゲート関連パスは従来のCODEOWNER承認も必要なので、通常PRと信頼境界変更を二層で扱う。
+- rulesets/旧来保護の承認件数を外部APIで実測し、0件設定を未保護として失敗させる。
+- 複数のbypassなしrulesetに分散したCODEOWNER・fresh・承認件数は実効ルールどおり合成評価する。
+
+## v2.55 での変更点（Docker/local Action参照境界。根拠は `.guardrails/GOALS.md` の G7/G9/G13）
+
+- `docker://image:tag`を固定済みと誤認していた穴を修正し、Docker ActionはSHA-256 digest必須にした。
+- local ActionはPR head側の可変実装を間接実行できるためrequired CIでは禁止する。
+- 可変Docker tag・local Actionをworkflow integrityの違反注入へ追加した。
+
+## v2.54 での変更点（Step 9検証不能のfail-closed化。根拠は `.guardrails/GOALS.md` の G7/G9/G10）
+
+- Step 9を✅にする外部監査で、gh不在・offline・API権限不足を表示だけで成功にしていた矛盾を修正。
+- required checks、bypass無しPR、fresh CODEOWNER review、owner解決の正の証拠が取れない場合も失敗する。
+- rulesets/旧来保護の片方で全条件を証明できれば、他方の照会不能だけでは失敗にしない。
+
 ## v2.53 での変更点（CODEOWNERS更新保持とowner解決実測。根拠は `.guardrails/GOALS.md` の G1/G5/G7/G9）
 
 - CODEOWNERS更新が既存の独自規則を消し、最初のowner 1名へ全パスを平坦化する欠陥を修正。
@@ -37,6 +74,8 @@
 - GitHubの「最後に一致した規則が勝つ」仕様に合わせ、guardrails管理区画を常に末尾へ置く。
 - Step 9は`codeowners/errors` APIも実測し、存在しないowner・write権限不足・構文エラーを
   ローカルの見た目だけで完了扱いにしない。メール形式ownerも正当に受理する。
+- 作業checkoutからの直インストールはGit追跡ファイルだけを配布し、未追跡の計画メモ・秘密・
+  一時生成物を対象リポジトリへ漏らさない。`.git`の無いzip展開時だけ全ファイルを走査する。
 
 ## v2.52 での変更点（CODEOWNERS分離と供給網固定。根拠は `.guardrails/GOALS.md` の G5/G7/G9/G13）
 
