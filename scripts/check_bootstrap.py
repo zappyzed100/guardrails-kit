@@ -198,8 +198,18 @@ GITHUB_ACTIONS_APP_ID = "15368"
 CODEOWNER_PLACEHOLDER = "@GUARDRAILS-HUMAN-REVIEWER"
 CODEOWNER_TRUST_PATHS = (
     "/.github/workflows/",
-    "/scripts/check_workflow_integrity.py",
     "/.github/CODEOWNERS",
+    "/.pre-commit-config.yaml",
+    "/.python-version",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/scripts/",
+    "/tests/",
+    "/.claude/hooks/",
+    "/.claude/settings.json",
+    "/.codex/hooks/",
+    "/.codex/hooks.json",
+    "/bindings/catalog.md",
 )
 
 
@@ -250,7 +260,7 @@ def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]
 
 def verify_required_checks(root: Path,
                            required_contexts: tuple[str, ...] = REQUIRED_CHECK_CONTEXTS) -> list[str]:
-    """Step 9 ④ の外部設定（bypass無しPR＋CODEOWNER＋全job required）を実測する（v2.35〜v2.51）。
+    """Step 9 ④ の外部設定（bypass無しPR＋CODEOWNER＋全job required）を実測する（v2.35〜v2.52）。
 
     ローカルの門もリポジトリ内の CI 定義も、この設定だけは代替できない——PR 必須と
     required checks はリポジトリ設定側にしか存在せず（§5・Phase 21「required の完成は
@@ -401,7 +411,7 @@ def assert_step_9(root: Path, ctx: dict) -> list[str]:
     if not language_jobs:
         fails.append("CI に列のテスト/解析ジョブが無い（通常workflowの3コアjob以外ゼロ——近似判定 §7.4）")
     required = REQUIRED_CHECK_CONTEXTS + tuple(sorted(language_jobs))
-    fails += verify_required_checks(root, required)  # ④ 外部設定の実測（v2.35〜v2.51）
+    fails += verify_required_checks(root, required)  # ④ 外部設定の実測（v2.35〜v2.52）
     return fails
 
 
@@ -531,7 +541,8 @@ def run_verify_scenarios() -> int:
     valid_codeowners = "\n".join(f"{path} @human-reviewer" for path in CODEOWNER_TRUST_PATHS)
     codeowner_cases = [
         ("正常CODEOWNERS", valid_codeowners, 0),
-        ("placeholder残置", valid_codeowners.replace("@human-reviewer", CODEOWNER_PLACEHOLDER), 3),
+        ("placeholder残置", valid_codeowners.replace("@human-reviewer", CODEOWNER_PLACEHOLDER),
+         len(CODEOWNER_TRUST_PATHS)),
         ("workflow所有者欠落", valid_codeowners.replace(
             "/.github/workflows/ @human-reviewer\n", ""), 1),
     ]

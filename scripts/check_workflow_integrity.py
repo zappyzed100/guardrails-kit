@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,14 @@ TRUSTED = ".github/workflows/guardrails-trusted.yml"
 CODEOWNERS = ".github/CODEOWNERS"
 SELF = "scripts/check_workflow_integrity.py"
 TRUST_ROOTS = (TRUSTED, SELF, CI, CODEOWNERS)
+CHECKOUT_SHA = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+SETUP_UV_SHA = "astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86"
+CACHE_SHA = "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
+FETCH_PR_RUN = ('git fetch --no-tags origin "+refs/pull/${{ github.event.pull_request.number }}'
+                '/head:refs/remotes/pull/${{ github.event.pull_request.number }}/head"')
+VERIFY_PR_RUN = ('uv run scripts/check_workflow_integrity.py '
+                 '--base "${{ github.event.pull_request.base.sha }}" '
+                 '--head "refs/remotes/pull/${{ github.event.pull_request.number }}/head"')
 
 
 def changed_trust_roots(base: dict[str, str], head: dict[str, str]) -> list[str]:
@@ -63,6 +72,42 @@ def _trigger_keys(text: str) -> set[str]:
     return keys
 
 
+def _validate_action_pins(text: str, rel: str) -> list[str]:
+    """外部Actionは可変tag/branchでなくfull commit SHAだけを許す。"""
+    fails: list[str] = []
+    for job, block in rs.workflow_job_blocks(text).items():
+        for use in _values(block, "uses"):
+            if use.startswith(("./", "docker://")):
+                continue
+            if not re.search(r"@[0-9a-fA-F]{40}$", use):
+                fails.append(f"{rel}: {job} の外部Actionがfull SHA固定でない: {use}")
+    return fails
+
+
+def validate_trusted(text: str) -> list[str]:
+    fails: list[str] = []
+    if _trigger_keys(text) != {"pull_request_target"}:
+        fails.append(f"{TRUSTED}: triggerがpull_request_target単独でない")
+    permissions = _live("\n".join(rs.yaml_top_block(text, "permissions")))
+    if permissions != ["contents: read"]:
+        fails.append(f"{TRUSTED}: permissionsがcontents: read単独でない")
+    block = rs.workflow_job_blocks(text).get("workflow-integrity")
+    if block is None:
+        fails.append(f"{TRUSTED}: workflow-integrity jobが無い")
+        return fails
+    if _values(block, "uses") != [CHECKOUT_SHA, SETUP_UV_SHA]:
+        fails.append(f"{TRUSTED}: usesが信頼済み構成と不一致")
+    if _values(block, "run") != [FETCH_PR_RUN, VERIFY_PR_RUN]:
+        fails.append(f"{TRUSTED}: runが信頼済み構成と不一致")
+    live = _live(block)
+    if not any(line.startswith("fetch-depth: 0") for line in live):
+        fails.append(f"{TRUSTED}: fetch-depth: 0が無い")
+    if any(line.startswith(("continue-on-error:", "permissions:", "shell:")) for line in live):
+        fails.append(f"{TRUSTED}: 判定を弱める属性がある")
+    fails += _validate_action_pins(text, TRUSTED)
+    return fails
+
+
 def validate_ci(text: str) -> list[str]:
     fails: list[str] = []
     triggers = _trigger_keys(text)
@@ -72,17 +117,17 @@ def validate_ci(text: str) -> list[str]:
     blocks = rs.workflow_job_blocks(text)
     specs = {
         "checks": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5", "actions/cache@v4"],
-            "runs": ["uvx pre-commit run --all-files --show-diff-on-failure"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA, CACHE_SHA],
+            "runs": ["uvx --from pre-commit==4.6.0 pre-commit run --all-files --show-diff-on-failure"],
             "ifs": [],
         },
         "red-first": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA],
             "runs": ['uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"'],
             "ifs": ["if: github.event_name == 'pull_request'"],
         },
         "commit-msg-history": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA],
             "runs": ['uv run scripts/check_commit_msg.py --base "${{ github.event.pull_request.base.sha }}"'],
             "ifs": ["if: github.event_name == 'pull_request'"],
         },
@@ -105,22 +150,38 @@ def validate_ci(text: str) -> list[str]:
             line.startswith("fetch-depth: 0") for line in live
         ):
             fails.append(f"{CI}: {job} に fetch-depth: 0 が無い")
+    fails += _validate_action_pins(text, CI)
     return fails
 
 
 def verify_scenarios(root: Path) -> int:
     original = rs.read_text(root, CI)
+    unpinned_job = "\n  fake-check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
     cases = [
         ("正常", original, 0),
         ("checks削除", original.replace("  checks:\n", "  checks-removed:\n", 1), 1),
-        ("checks素通し", original.replace("      - run: uvx pre-commit run --all-files --show-diff-on-failure",
+        ("checks素通し", original.replace("      - run: uvx --from pre-commit==4.6.0 pre-commit run --all-files --show-diff-on-failure",
                                           "      - run: true", 1), 1),
         ("continue-on-error", original.replace("  checks:\n", "  checks:\n    continue-on-error: true\n", 1), 1),
         ("pull_request削除", original.replace("  pull_request:\n", "", 1), 1),
+        ("言語jobのAction可変tag", original + unpinned_job, 1),
     ]
     bad = 0
     for name, text, minimum in cases:
         got = len(validate_ci(text))
+        if got < minimum:
+            bad += 1
+            print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
+                  file=sys.stderr)
+    trusted_original = rs.read_text(root, TRUSTED)
+    trusted_cases = [
+        ("trusted正常", trusted_original, 0),
+        ("trusted Action可変tag", trusted_original.replace(CHECKOUT_SHA, "actions/checkout@v4"), 1),
+        ("trusted検査素通し", trusted_original.replace(VERIFY_PR_RUN, "true"), 1),
+        ("trusted権限昇格", trusted_original.replace("contents: read", "contents: write"), 1),
+    ]
+    for name, text, minimum in trusted_cases:
+        got = len(validate_trusted(text))
         if got < minimum:
             bad += 1
             print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
@@ -136,7 +197,7 @@ def verify_scenarios(root: Path) -> int:
                   file=sys.stderr)
     if bad:
         return 1
-    print(f"[workflow-integrity] verify シナリオ 全{len(cases) + 3}本 PASS")
+    print(f"[workflow-integrity] verify シナリオ 全{len(cases) + len(trusted_cases) + 3}本 PASS")
     return 0
 
 
@@ -157,15 +218,17 @@ def main(argv: list[str]) -> int:
         head_blobs = {rel: _blob(root, args.head, rel) for rel in TRUST_ROOTS}
         changed = changed_trust_roots(base_blobs, head_blobs)
         for rel in changed:
-                print(f"HARD:workflow-trust-root-changed {rel} workflowの信頼の根はPR自身では変更できない。"
-                      "人間レビュー後に required context を一時解除してPRマージし、直ちに戻す",
-                      file=sys.stderr)
+            print(f"HARD:workflow-trust-root-changed {rel} workflowの信頼の根はPR自身では変更できない。"
+                  "人間レビュー後に required context を一時解除してPRマージし、直ちに戻す",
+                  file=sys.stderr)
         if changed:
             return 1
         ci_text = head_blobs[CI]
+        trusted_text = head_blobs[TRUSTED]
     else:
         ci_text = rs.read_text(root, CI)
-    fails = validate_ci(ci_text)
+        trusted_text = rs.read_text(root, TRUSTED)
+    fails = validate_ci(ci_text) + validate_trusted(trusted_text)
     for message in fails:
         print(f"HARD:workflow-integrity {message}", file=sys.stderr)
     if fails:

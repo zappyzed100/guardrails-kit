@@ -28,15 +28,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}   # check-bootstrap の Step 9 ④ 再監査（gh api——読み取りのみ §3.5・v2.35）
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       # §7.1: Python 系はすべて uv 経由。Python 自体も .python-version に従い uv が自動解決
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/cache@v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
       # フックによるファイル変更（§3.2 の再生成差分を含む）も CI では失敗として現れる
-      - run: uvx pre-commit run --all-files --show-diff-on-failure
+      - run: uvx --from pre-commit==4.6.0 pre-commit run --all-files --show-diff-on-failure
 
   # red-first 証明（§5・Phase 18 — v2.7）: PR 範囲の fix: の同梱テストが親コミットで
   # 赤だった（＝バグを再現していた）ことを機械証明する。未配線（言語なし出荷）では不発。
@@ -48,10 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20   # ハング保険（checks と同じ — G11。1テストの保険はスクリプト側 300 秒）
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（§5）
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
       # ---- BINDING: 採用列のテスト実行環境をここへ（例: setup-node + npm ci。§5・§11 表A）----
       # >>> GUARDRAILS BINDING: red-first-setup >>>
       # <<< GUARDRAILS BINDING: red-first-setup <<<
@@ -70,10 +70,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15   # ハング保険（他ジョブと同じ — G11。1コミットの保険はスクリプト側 60 秒）
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（red-first と同じ理由 — §5）
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
       - run: uv run scripts/check_commit_msg.py --base "${{ github.event.pull_request.base.sha }}"
 
   # ============ BINDING: 言語別テスト・解析・E2E ジョブ（.guardrails/GUARDRAILS.md §5・§12.4・§11 表A）============

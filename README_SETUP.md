@@ -30,6 +30,18 @@
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 | 導入済みリポジトリの新版更新 | `PROMPT_claude_code_update.md` | インストーラ再実行（UPGRADED——git 履歴が安全網）→ 消えた充填を履歴から復元 → §10 の Phase 見出し diff で新しい門を列挙 → 門ごとに違反注入 DoD |
 
+## v2.52 での変更点（CODEOWNERS分離と供給網固定。根拠は `.guardrails/GOALS.md` の G5/G7/G9/G13）
+
+- キット配布元の実効 `.github/CODEOWNERS` と、導入先へ配るplaceholder入り
+  `.guardrails/CODEOWNERS.template` を分離。インストーラは後者だけを導入先の
+  `.github/CODEOWNERS` へ写し、構造検査が再混同をhardで止める。
+- trusted/CI workflowとcatalog全列の外部ActionをコミットSHAへ固定。存在しなかった
+  `supabase/setup-cli@v1` は公式v3へ是正した。
+- trusted jobのpre-commit本体を4.6.0、remote hookをコミットSHAへ固定し、Actionの内側で
+  実行ツールが最新版へ漂う経路も閉じた。integrityシナリオはtrusted workflow自体の骨抜きも検証する。
+- PR headで走る検査スクリプトやコーパスだけをno-op化する穴を塞ぐため、pre-commit設定・
+  scripts/tests・フック設定・Python実行環境もCODEOWNERS対象へ拡張した。
+
 ## v2.51 での変更点（required check名偽装の封鎖。根拠は `.guardrails/GOALS.md` の G7/G9/G10）
 
 - GitHubのrequired status checkはworkflow/eventを識別せずjob名だけを見るため、PR側の別workflowが
@@ -760,7 +772,7 @@ zip・展開元フォルダを自動削除する（残したい場合は `--keep
 | uv | §7.1: Python 系の唯一の実行経路 | 無ければエージェントに公式インストーラで導入させてよい |
 | 対象言語のツールチェーン | 整形・テスト・解析 | 採用列の「前提ツール」欄（例: ts-react-web 列なら Node.js。Playwright MCP も npx 経由） |
 
-pre-commit 本体は Step 3 で `uv tool install pre-commit` として導入する。
+pre-commit 本体は Step 3 で `uv tool install pre-commit==4.6.0` として導入する。
 
 ## 3. エージェントの起動と指示
 
