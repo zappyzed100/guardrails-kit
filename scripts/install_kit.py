@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -77,7 +78,8 @@ def is_meta(rel: str) -> bool:
         ".claude/agent-registry.json", ".claude/agent-memory-local",
         ".claude/first-run", ".claude/assistant-daemon-state.json",
     }
-# 作業チェックアウトから直接導入しても、言語ツールの生成キャッシュを配布しない。
+# Git checkoutでは追跡ファイルだけを候補にする。zip等の.git無し展開物だけ全走査し、
+# 作業チェックアウトから未追跡メモ・秘密・生成物を配布しない。以下はzip側の除外も兼ねる。
 # zip配布では通常含まれないため、直インストール経路でだけ混入する差をここで消す。
 EXCLUDE_DIRS = {
     ".git", "__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_cache",
@@ -125,9 +127,11 @@ def kit_source_rel(target_rel: str) -> str:
 def kit_source_files(kit_root: Path) -> list[Path]:
     """Git checkoutは追跡ファイルだけ、zip展開物は全ファイルを配布候補にする。"""
     if (kit_root / ".git").exists():
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)  # 呼出元の一時indexを別repositoryへ持ち込まない。
         proc = subprocess.run(
             ["git", "ls-files", "-z"], cwd=kit_root, capture_output=True,
-            encoding="utf-8", errors="surrogateescape",
+            encoding="utf-8", errors="surrogateescape", env=env,
         )
         if proc.returncode != 0:
             raise RuntimeError(f"git ls-files failed: {proc.stderr.strip()}")
@@ -199,7 +203,13 @@ def splice_codeowners(src_text: str, dst_text: str) -> str | None:
             return None
         # CODEOWNERSは最後に一致した規則が勝つ。独自の広い規則が区画後方にあっても
         # guardrails対象を上書きしないよう、管理区画を常に末尾へ移動する。
-        outside = (dst_text[:dst_span[0]] + dst_text[dst_span[1]:]).rstrip()
+        outside_lines = []
+        for raw in (dst_text[:dst_span[0]] + dst_text[dst_span[1]:]).splitlines():
+            parts = raw.strip().split()
+            if len(parts) >= 2 and parts[0] in source_rules:
+                continue  # 区画外の同一パスは実効ownerを区画へ移したので重複させない。
+            outside_lines.append(raw)
+        outside = "\n".join(outside_lines).rstrip()
         return (outside + "\n\n" if outside else "") + rendered
 
     # v2.52以前の管理区画なし版: 既存のguardrails対象行だけを除き、独自規則は順序ごと保持。
@@ -481,7 +491,7 @@ def main() -> int:
               "例: cd <リポジトリルート> && python3 .guardrails-kit-src/scripts/install_kit.py")
         return 2
 
-    # --- マニフェスト = キット内の全ファイル − メタ ---
+    # --- マニフェスト = Git追跡ファイル（zipは全ファイル）− メタ ---
     manifest: list[str] = []
     for p in sorted(kit_source_files(kit_root)):
         if not p.is_file():

@@ -77,7 +77,12 @@ def _validate_action_pins(text: str, rel: str) -> list[str]:
     fails: list[str] = []
     for job, block in rs.workflow_job_blocks(text).items():
         for use in _values(block, "uses"):
-            if use.startswith(("./", "docker://")):
+            if use.startswith("./"):
+                fails.append(f"{rel}: {job} のlocal ActionはPR head側の可変実装なので禁止: {use}")
+                continue
+            if use.startswith("docker://"):
+                if not re.search(r"@sha256:[0-9a-fA-F]{64}$", use):
+                    fails.append(f"{rel}: {job} のDocker Actionがdigest固定でない: {use}")
                 continue
             if not re.search(r"@[0-9a-fA-F]{40}$", use):
                 fails.append(f"{rel}: {job} の外部Actionがfull SHA固定でない: {use}")
@@ -157,6 +162,10 @@ def validate_ci(text: str) -> list[str]:
 def verify_scenarios(root: Path) -> int:
     original = rs.read_text(root, CI)
     unpinned_job = "\n  fake-check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
+    mutable_docker_job = ("\n  docker-check:\n    runs-on: ubuntu-latest\n    steps:\n"
+                          "      - uses: docker://alpine:latest\n")
+    unsafe_local_job = ("\n  local-check:\n    runs-on: ubuntu-latest\n    steps:\n"
+                        "      - uses: ./tools/custom-action\n")
     cases = [
         ("正常", original, 0),
         ("checks削除", original.replace("  checks:\n", "  checks-removed:\n", 1), 1),
@@ -165,6 +174,8 @@ def verify_scenarios(root: Path) -> int:
         ("continue-on-error", original.replace("  checks:\n", "  checks:\n    continue-on-error: true\n", 1), 1),
         ("pull_request削除", original.replace("  pull_request:\n", "", 1), 1),
         ("言語jobのAction可変tag", original + unpinned_job, 1),
+        ("言語jobのDocker可変tag", original + mutable_docker_job, 1),
+        ("CODEOWNERS保護外local Action", original + unsafe_local_job, 1),
     ]
     bad = 0
     for name, text, minimum in cases:

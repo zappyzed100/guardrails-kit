@@ -15,8 +15,9 @@
 > **新しい列の起こし方**: 下のスキーマ表の全行を埋める（空欄不可・「該当なし」は可）。
 > 例の値のコピペで埋めた気になるのは禁止（§11 Step 0 と同じ規律）。
 >
-> **GitHub Actions の固定規律（v2.52）**: 外部 `uses:` はタグ/branchでなく40桁コミットSHAへ
-> 固定し、末尾コメントに解決元タグを残す。下記SHAは各Action公式リポジトリのtag refを
+> **GitHub Actions の固定規律（v2.55）**: 外部 `uses:` はタグ/branchでなく40桁コミットSHAへ
+> 固定し、Docker ActionはSHA-256 digestへ固定する。required CIではPR head側の実装を
+> 間接実行できるlocal Actionを使わない。末尾コメントに解決元タグを残す。下記SHAは各Action公式リポジトリのtag refを
 > 2026-07-16に解決した値。`supabase/setup-cli` は存在しない `v1` を現行 `v3.0.0` に是正した。
 
 ## スキーマ（列が埋めるべき行の一覧）

@@ -1,6 +1,7 @@
 # check_fill_bindings.py — fill_bindings の失敗時無変更・正常充填を回帰検査する
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,12 +12,14 @@ import install_kit as ik  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FILL = ROOT / "scripts" / "fill_bindings.py"
+GIT_ENV = os.environ.copy()
+GIT_ENV.pop("GIT_INDEX_FILE", None)
 
 
 def run(root: Path, *columns: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(FILL), *columns], cwd=root,
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=GIT_ENV,
     )
 
 
@@ -59,14 +62,14 @@ def main() -> int:
             "```yaml\n  - id: probe\n```\n",
             encoding="utf-8", newline="\n",
         )
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=GIT_ENV)
 
         source = root / "kit-source"
         source.mkdir()
-        subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+        subprocess.run(["git", "init", "-q"], cwd=source, check=True, env=GIT_ENV)
         (source / "tracked.txt").write_text("tracked\n", encoding="utf-8")
         (source / "PLAN.md").write_text("private worktree note\n", encoding="utf-8")
-        subprocess.run(["git", "add", "tracked.txt"], cwd=source, check=True)
+        subprocess.run(["git", "add", "tracked.txt"], cwd=source, check=True, env=GIT_ENV)
         source_files = {p.relative_to(source).as_posix() for p in ik.kit_source_files(source)}
         if source_files != {"tracked.txt"}:
             print("HARD:installer-untracked-leak Git checkoutの未追跡ファイルを配布対象にした",
@@ -125,9 +128,11 @@ def main() -> int:
                 or "/bindings/catalog.md @human-owner @security-owner" not in owners_v2):
             print("HARD:codeowners-upgrade 管理区画の再更新が冪等でない", file=sys.stderr)
             return 1
-        broad_after = owners + "* @late-owner\n"
+        broad_after = owners + "* @late-owner\n/tests/ @late-test-owner\n"
         reordered = ik.splice_managed(owner_src_v2, broad_after)
-        if reordered is None or not reordered.rstrip().endswith(ik.CODEOWNERS_END):
+        if (reordered is None or not reordered.rstrip().endswith(ik.CODEOWNERS_END)
+                or reordered.count("/tests/") != 1
+                or "/tests/ @late-test-owner" not in reordered):
             print("HARD:codeowners-order 後勝ちの独自規則がguardrails保護を上書きする", file=sys.stderr)
             return 1
         invalid = legacy.replace("@human-owner @security-owner", ik.CODEOWNER_PLACEHOLDER)
