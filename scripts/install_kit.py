@@ -24,8 +24,9 @@ zip のままなら先に:  python3 -m zipfile -e guardrails-kit-*.zip .guardrai
 **区画の中身だけ既存を引き継いで**それ以外を新版にする（列充填の復元作業が消える）。
 区画マーカーが無い旧版は CONFLICT で停止する（充填を黙って失わない — G9）。
 YAML 系は複数の名前付き区画（`GUARDRAILS BINDING: <name>`）を同じ方式で継承する。
-CODEOWNERS は `.guardrails/CODEOWNERS.template` を配布原本とし、既存の実ownerを新版
-テンプレート全行へ差し戻して継承する。キット配布元自身の `.github/CODEOWNERS` はコピーしない。
+CODEOWNERS は `.guardrails/CODEOWNERS.template` を配布原本とし、既存の独自規則・複数owner・
+パス別ownerを保持したまま末尾の管理区画だけを新版化する。キット配布元自身の
+`.github/CODEOWNERS` はコピーしない。
 
 ファイルごとの判定（表示ステータス）:
     OK         既存とバイト同一（何もしない・冪等）
@@ -95,6 +96,9 @@ SETTINGS = ".claude/settings.json"
 CODEX_HOOKS = ".codex/hooks.json"
 CODEOWNERS = ".github/CODEOWNERS"
 CODEOWNERS_TEMPLATE = ".guardrails/CODEOWNERS.template"
+CODEOWNERS_BEGIN = "# >>> GUARDRAILS CODEOWNERS >>>"
+CODEOWNERS_END = "# <<< GUARDRAILS CODEOWNERS <<<"
+CODEOWNER_PLACEHOLDER = "@GUARDRAILS-HUMAN-REVIEWER"
 GITIGNORE_BEGIN = "# >>> guardrails-kit >>>"
 # 旧版キットの痕跡（新パスへ移行済み。存在すれば NOTE で削除を促す——ブロックはしない）
 LEGACY_PATHS = [".github/workflows/ci.yml"]
@@ -116,6 +120,97 @@ MANAGED_FILES = {
 def kit_source_rel(target_rel: str) -> str:
     """配布先パスに対応するキット側原本。CODEOWNERSだけ配布元実設定と分離する。"""
     return CODEOWNERS_TEMPLATE if target_rel == CODEOWNERS else target_rel
+
+
+def kit_source_files(kit_root: Path) -> list[Path]:
+    """Git checkoutは追跡ファイルだけ、zip展開物は全ファイルを配布候補にする。"""
+    if (kit_root / ".git").exists():
+        proc = subprocess.run(
+            ["git", "ls-files", "-z"], cwd=kit_root, capture_output=True,
+            encoding="utf-8", errors="surrogateescape",
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"git ls-files failed: {proc.stderr.strip()}")
+        return [kit_root / rel for rel in proc.stdout.split("\0") if rel]
+    return list(kit_root.rglob("*"))
+
+
+def _codeowner_rules(text: str) -> dict[str, tuple[str, ...]]:
+    rules: dict[str, tuple[str, ...]] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            rules[parts[0]] = tuple(parts[1:])
+    return rules
+
+
+def _valid_codeowners(owners: tuple[str, ...]) -> bool:
+    return bool(owners) and CODEOWNER_PLACEHOLDER not in owners and all(
+        owner.startswith("@") or re.fullmatch(r"[^@\s]+@[^@\s]+", owner)
+        for owner in owners
+    )
+
+
+def _marked_block(text: str, begin: str, end: str) -> tuple[int, int] | None:
+    if text.count(begin) != 1 or text.count(end) != 1:
+        return None
+    start = text.find(begin)
+    stop = text.find(end, start)
+    if stop < start:
+        return None
+    stop += len(end)
+    if stop < len(text) and text[stop] == "\n":
+        stop += 1
+    return start, stop
+
+
+def splice_codeowners(src_text: str, dst_text: str) -> str | None:
+    """独自規則とowner割当を保持し、guardrails管理区画だけを新版化する。"""
+    src_span = _marked_block(src_text, CODEOWNERS_BEGIN, CODEOWNERS_END)
+    if src_span is None:
+        return None
+    source_rules = _codeowner_rules(src_text)
+    existing_rules = _codeowner_rules(dst_text)
+    default = existing_rules.get("/.github/workflows/", ())
+    if not _valid_codeowners(default):
+        return None
+    for path in source_rules:
+        if path in existing_rules and not _valid_codeowners(existing_rules[path]):
+            return None
+
+    rendered_lines: list[str] = []
+    for raw in src_text[src_span[0]:src_span[1]].splitlines():
+        parts = raw.strip().split()
+        if len(parts) >= 2 and parts[0] in source_rules:
+            owners = existing_rules.get(parts[0], default)
+            rendered_lines.append(f"{parts[0]} {' '.join(owners)}")
+        else:
+            rendered_lines.append(raw)
+    rendered = "\n".join(rendered_lines) + "\n"
+
+    has_begin = CODEOWNERS_BEGIN in dst_text
+    has_end = CODEOWNERS_END in dst_text
+    if has_begin or has_end:
+        dst_span = _marked_block(dst_text, CODEOWNERS_BEGIN, CODEOWNERS_END)
+        if dst_span is None:
+            return None
+        # CODEOWNERSは最後に一致した規則が勝つ。独自の広い規則が区画後方にあっても
+        # guardrails対象を上書きしないよう、管理区画を常に末尾へ移動する。
+        outside = (dst_text[:dst_span[0]] + dst_text[dst_span[1]:]).rstrip()
+        return (outside + "\n\n" if outside else "") + rendered
+
+    # v2.52以前の管理区画なし版: 既存のguardrails対象行だけを除き、独自規則は順序ごと保持。
+    kept = []
+    for raw in dst_text.splitlines():
+        parts = raw.strip().split()
+        if len(parts) >= 2 and parts[0] in source_rules:
+            continue
+        kept.append(raw)
+    prefix = "\n".join(kept).rstrip()
+    return (prefix + "\n\n" if prefix else "") + rendered
 
 
 def managed_inner(text: str) -> tuple[int, int] | None:
@@ -147,12 +242,8 @@ def named_managed_inner(text: str, name: str) -> tuple[int, int] | None:
 
 def splice_managed(src_text: str, dst_text: str) -> str | None:
     """新版 src の区画の中身を、既存 dst の区画の中身で置き換えた全文を返す。"""
-    codeowner_placeholder = "@GUARDRAILS-HUMAN-REVIEWER"
-    if codeowner_placeholder in src_text:
-        owner = re.search(r"(?m)^/\.github/workflows/\s+(@\S+)\s*$", dst_text)
-        if owner is None or owner.group(1) == codeowner_placeholder:
-            return None
-        return src_text.replace(codeowner_placeholder, owner.group(1))
+    if CODEOWNER_PLACEHOLDER in src_text:
+        return splice_codeowners(src_text, dst_text)
     names = re.findall(r"# >>> GUARDRAILS BINDING: ([A-Za-z0-9_.-]+) >>>", src_text)
     if names:
         result = src_text
@@ -392,7 +483,7 @@ def main() -> int:
 
     # --- マニフェスト = キット内の全ファイル − メタ ---
     manifest: list[str] = []
-    for p in sorted(kit_root.rglob("*")):
+    for p in sorted(kit_source_files(kit_root)):
         if not p.is_file():
             continue
         rel = p.relative_to(kit_root).as_posix()
@@ -440,10 +531,16 @@ def main() -> int:
             src_text, dst_text = read_text(src), read_text(dst)
             spliced = splice_managed(src_text, dst_text)
             if spliced is None:
+                if rel == CODEOWNERS:
+                    hint = ("既存の /.github/workflows/ に実ownerが無い、owner表記が不正、または "
+                            f"{CODEOWNERS_BEGIN} 〜 {CODEOWNERS_END} の片方だけがある。"
+                            "owner/管理区画を直してから再実行する（独自規則は自動保持）")
+                else:
+                    hint = ("管理区画マーカー（" + MANAGED_BEGIN + " 〜 END）が無いか壊れて"
+                            "いる。既存の充填部分を区画マーカーで包んでから再実行する"
+                            "（旧版からの移行——充填の黙失を防ぐための停止）")
                 results.append(("CONFLICT:unmarked-binding", rel,
-                                "管理区画マーカー（" + MANAGED_BEGIN + " 〜 END）が無いか壊れて"
-                                "いる。既存の充填部分を区画マーカーで包んでから再実行する"
-                                "（旧版からの移行——充填の黙失を防ぐための停止）"))
+                                hint))
                 conflicts = True
                 continue
             if spliced == dst_text:
@@ -458,7 +555,8 @@ def main() -> int:
                 if not dry:
                     with open(dst, "w", encoding="utf-8", newline="\n") as f:
                         f.write(spliced)
-                results.append(("UPGRADED", rel, "BINDING 区画の充填を保持して更新" + note_diff))
+                kept = "CODEOWNERS規則" if rel == CODEOWNERS else "BINDING 区画の充填"
+                results.append(("UPGRADED", rel, kept + "を保持して更新" + note_diff))
             else:
                 results.append(("CONFLICT:uncommitted", rel, DEFAULT_HINT_DIRTY))
                 conflicts = True

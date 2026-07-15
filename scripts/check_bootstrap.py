@@ -226,7 +226,8 @@ def codeowners_failures(text: str) -> list[str]:
     fails: list[str] = []
     for path in CODEOWNER_TRUST_PATHS:
         owners = owners_by_path.get(path, [])
-        if not owners or CODEOWNER_PLACEHOLDER in owners or not all(o.startswith("@") for o in owners):
+        valid = all(o.startswith("@") or re.fullmatch(r"[^@\s]+@[^@\s]+", o) for o in owners)
+        if not owners or CODEOWNER_PLACEHOLDER in owners or not valid:
             fails.append(f"CODEOWNERS の {path} に実在人間/チームownerが無い")
     return fails
 
@@ -292,6 +293,22 @@ def verify_required_checks(root: Path,
               "（オフライン/未認証/権限不足——表示して素通し — §3.5）", file=sys.stderr)
         return []
     branch = lines[0]
+    external_owner_fails: list[str] = []
+    cost, owner_errors = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/codeowners/errors",
+        '.errors[]? | [.path, (.line|tostring), .kind, .suggestion] | @tsv')
+    if cost == "ok" and owner_errors:
+        detail = "; ".join(owner_errors)
+        external_owner_fails.append(
+            f"既定ブランチ {branch} の CODEOWNERS がGitHubで解決不能: {detail}"
+            "（ownerの存在・write権限・構文を直し、APIエラー0件を実測する — §11 Step 9 ④）")
+    elif cost == "absent":
+        external_owner_fails.append(
+            f"既定ブランチ {branch} にGitHubが読めるCODEOWNERSが無い"
+            "（CODEOWNERSはPRのbase branchに必要 — §11 Step 9 ④）")
+    elif cost != "ok":
+        print("[bootstrap] Step 9 ④: CODEOWNERS errors APIを照会できず、ownerの実在・write権限を"
+              "検証できない（表示して素通し。管理権限で再監査する — §3.5）", file=sys.stderr)
     contexts: set[str] = set()
     rules_endpoint = f"repos/{owner}/{repo}/rules/branches/{branch}"
     st, ls = _gh_api(
@@ -363,7 +380,7 @@ def verify_required_checks(root: Path,
     # 重複」はローカルフックが動く経路にしか成立しない——CI を最終防衛線とする主張
     # （§5・README）の対象経路（Web 編集・フック未導入マシン）では、この2ジョブが唯一の
     # 強制点で、required でなければ赤のままマージできる。
-    fails: list[str] = []
+    fails: list[str] = list(external_owner_fails)
     missing = [j for j in required_contexts if j not in contexts]
     if missing and rules_definitive and classic_definitive:
         # 不在の断定は両系統の確定回答が揃った時だけ（v2.36 是正——片系統が照会不能のまま
@@ -431,6 +448,7 @@ def run_verify_scenarios() -> int:
     CLASSIC_PR = "classic/pr"
     CLASSIC_ADMIN = "classic/admin"
     CLASSIC_BYPASS = "classic/bypass"
+    CODEOWNERS_ERRORS = "codeowners/errors"
 
     def fake_api(responses: dict[str, tuple[str, list[str]]]):
         def _fake(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
@@ -446,6 +464,8 @@ def run_verify_scenarios() -> int:
                 return responses.get(CLASSIC_CHECKS, ("unverifiable", []))
             if endpoint.endswith("/protection"):
                 return responses.get(CLASSIC_ADMIN, ("unverifiable", []))
+            if endpoint.endswith("/codeowners/errors"):
+                return responses.get(CODEOWNERS_ERRORS, ("ok", []))
             return responses.get("", ("ok", ["main"]))  # 既定: default_branch 照会は成功
         return _fake
 
@@ -512,6 +532,12 @@ def run_verify_scenarios() -> int:
          {RULE_CHECKS: ("ok", ALL4_CHECKS),
           RULE_PR: ("ok", ["101\ttrue\tfalse\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
+        ("CODEOWNERSのownerがGitHubで解決不能 → ローカル表記だけで完了にしない", 1,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", []),
+          CODEOWNERS_ERRORS: ("ok", [".github/CODEOWNERS\t3\tUnknown owner\towner missing"])}, ALL4),
         ("red-first のみ確認・旧来保護は照会不能 → 不在を断定せず素通し", 0,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("ok", trusted(["red-first"])), RULE_PR: ("ok", []),
@@ -545,6 +571,7 @@ def run_verify_scenarios() -> int:
          len(CODEOWNER_TRUST_PATHS)),
         ("workflow所有者欠落", valid_codeowners.replace(
             "/.github/workflows/ @human-reviewer\n", ""), 1),
+        ("GitHub対応のメールowner", valid_codeowners.replace("@human-reviewer", "human@example.com"), 0),
     ]
     for name, text, want in codeowner_cases:
         got = len(codeowners_failures(text))
