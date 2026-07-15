@@ -67,6 +67,8 @@ push→CI の全工程で、**検査自身の検証**（違反注入・門番の
 信頼済みコードで PR を検査し、CI workflow 自体の変更を拒否します。ただしGitHubのrequired
 checkはworkflowを識別せずjob名だけを見るため、`.github/CODEOWNERS` とサーバー側の
 code owner review必須化も併用し、同名ダミーjobによる偽装を人間境界で止めます。
+一人開発では「人間を2人」にする必要はありません。本人をCODEOWNERにし、PR作成だけを
+権限を絞ったmachine user/GitHub Appへ分離します。AIへ本人のowner資格情報は渡しません。
 PR は、Web 編集やフック未導入マシンの変更を既定ブランチへ入る**前**に止める境界です。
 `push` の CI は合流後の異常検知であり、この予防を代替しません。
 

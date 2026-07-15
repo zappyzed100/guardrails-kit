@@ -34,8 +34,8 @@
 
 - GitHubのrequired status checkはworkflow/eventを識別せずjob名だけを見るため、PR側の別workflowが
   同名jobを報告できる穴を確認。`workflow-integrity` 単独を完全な信頼境界とする記述を撤回した。
-- `.github/CODEOWNERS` でworkflow全体・integrity検査器・CODEOWNERS自身を別人の人間reviewerへ
-  割り当て、ruleset/旧来保護のcode owner review必須設定までbootstrapが実測する。
+- `.github/CODEOWNERS` でworkflow全体・integrity検査器・CODEOWNERS自身を人間ownerへ割り当てる。
+  一人開発ではPR作者をmachine user/GitHub Appへ分離し、code owner review設定まで実測する。
 - CODEOWNERSのplaceholder残置・対象行欠落・サーバー側code owner review無効を回帰シナリオ化。
 - required checksの期待送信元をGitHub Actions Appへ固定し、`any source`のcommit status偽装を拒否。
   権限不足でrulesetの`bypass_actors`が省略された応答を「0人」と誤認するfail-openも修正した。

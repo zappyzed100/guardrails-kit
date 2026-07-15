@@ -11,7 +11,8 @@
 **全 Step で 1 Step = 1コミット = 1ブランチ = 1PR**。既定ブランチへ直接 push しない。
 Step 9 では `workflow-integrity` を含む4コアjobと列固有のテスト・解析・E2E jobをすべて
 required checksへ登録し、PR必須ルールにadmin / appの直接push bypassが無いことまで確認する。
-`.github/CODEOWNERS` のplaceholderはPR作成者とは別の人間ownerへ置換し、workflow群・
+`.github/CODEOWNERS` のplaceholderは人間owner（一人開発なら本人）へ置換し、PRはowner権限を
+持たないmachine user/GitHub Appとして作成する。workflow群・
 integrity検査器・CODEOWNERS自身へのcode owner reviewをサーバー側でも必須化する。
 required checkの期待送信元は全てGitHub Actions Appに固定し、`any source`にしない。
 `dismiss stale reviews` または `require last push approval` も有効にする。
