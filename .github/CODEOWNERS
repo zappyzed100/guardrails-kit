@@ -1,5 +1,5 @@
-# CODEOWNERS — workflow信頼境界。Step 0で下記placeholderを、PR作成者とは別の
-# 実在する人間ユーザー/チームへ置換する（Phase 53）。
+# CODEOWNERS — workflow信頼境界。Step 0で下記placeholderを実在人間ownerへ置換する。
+# 一人開発ではその一人を指定し、PRは権限を絞ったmachine user/GitHub Appに作らせる（Phase 53）。
 /.github/workflows/ @GUARDRAILS-HUMAN-REVIEWER
 /scripts/check_workflow_integrity.py @GUARDRAILS-HUMAN-REVIEWER
 /.github/CODEOWNERS @GUARDRAILS-HUMAN-REVIEWER

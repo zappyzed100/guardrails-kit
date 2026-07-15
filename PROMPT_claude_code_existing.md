@@ -17,7 +17,7 @@
 - 中核不変条件: ★（壊れたら致命の性質。分かる範囲で — §12.6）
 - 外部I/O一覧: ★（分かる範囲で。Step -1b の棚卸しで補完される — §9.5）
 - GitHub リモート URL: ★（Step 9 の CI 実測に必要）
-- workflow信頼境界の人間CODEOWNER: ★（PR作成者とは別のGitHubユーザー/チーム。AI/アプリ不可）
+- workflow信頼境界の人間CODEOWNER: ★（一人開発なら本人。PR作者は別のmachine user/GitHub App）
 - 特記事項: ★（無ければ「なし」）
 
 ## 任務
