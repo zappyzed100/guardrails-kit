@@ -21,6 +21,14 @@ TRUSTED = ".github/workflows/guardrails-trusted.yml"
 CODEOWNERS = ".github/CODEOWNERS"
 SELF = "scripts/check_workflow_integrity.py"
 TRUST_ROOTS = (TRUSTED, SELF, CI, CODEOWNERS)
+CHECKOUT_SHA = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+SETUP_UV_SHA = "astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86"
+CACHE_SHA = "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
+FETCH_PR_RUN = ('git fetch --no-tags origin "+refs/pull/${{ github.event.pull_request.number }}'
+                '/head:refs/remotes/pull/${{ github.event.pull_request.number }}/head"')
+VERIFY_PR_RUN = ('uv run scripts/check_workflow_integrity.py '
+                 '--base "${{ github.event.pull_request.base.sha }}" '
+                 '--head "refs/remotes/pull/${{ github.event.pull_request.number }}/head"')
 
 
 def changed_trust_roots(base: dict[str, str], head: dict[str, str]) -> list[str]:
@@ -39,29 +47,6 @@ def _blob(root: Path, rev: str, rel: str) -> str:
 def _live(block: str) -> list[str]:
     return [line.strip() for line in block.splitlines()
             if line.strip() and not line.lstrip().startswith("#")]
-
-
-_BINDING_START = re.compile(r"^\s*#\s*>>> GUARDRAILS BINDING: \S+ >>>\s*$")
-_BINDING_END = re.compile(r"^\s*#\s*<<< GUARDRAILS BINDING: \S+ <<<\s*$")
-
-
-def _strip_bindings(block: str) -> str:
-    """BINDING管理区画（採用列が Step 0 で充填する区画——§11 表A）を落とす。
-
-    red-first の setup ステップ等、区画内の uses/run は採用列ごとに正当に異なるため
-    完全一致比較の対象から外す。弱体化属性の検査は全行に対して行われるので、区画内も
-    引き続き掛かる。開始マーカーだけで終了が無い場合は以降すべてが落ち、区画外必須の
-    run が消えて不一致になる（fail-closed）。"""
-    lines: list[str] = []
-    inside = False
-    for line in block.splitlines():
-        if _BINDING_START.match(line):
-            inside = True
-        elif _BINDING_END.match(line):
-            inside = False
-        elif not inside:
-            lines.append(line)
-    return "\n".join(lines)
 
 
 def _values(block: str, marker: str) -> list[str]:
@@ -87,6 +72,42 @@ def _trigger_keys(text: str) -> set[str]:
     return keys
 
 
+def _validate_action_pins(text: str, rel: str) -> list[str]:
+    """外部Actionは可変tag/branchでなくfull commit SHAだけを許す。"""
+    fails: list[str] = []
+    for job, block in rs.workflow_job_blocks(text).items():
+        for use in _values(block, "uses"):
+            if use.startswith(("./", "docker://")):
+                continue
+            if not re.search(r"@[0-9a-fA-F]{40}$", use):
+                fails.append(f"{rel}: {job} の外部Actionがfull SHA固定でない: {use}")
+    return fails
+
+
+def validate_trusted(text: str) -> list[str]:
+    fails: list[str] = []
+    if _trigger_keys(text) != {"pull_request_target"}:
+        fails.append(f"{TRUSTED}: triggerがpull_request_target単独でない")
+    permissions = _live("\n".join(rs.yaml_top_block(text, "permissions")))
+    if permissions != ["contents: read"]:
+        fails.append(f"{TRUSTED}: permissionsがcontents: read単独でない")
+    block = rs.workflow_job_blocks(text).get("workflow-integrity")
+    if block is None:
+        fails.append(f"{TRUSTED}: workflow-integrity jobが無い")
+        return fails
+    if _values(block, "uses") != [CHECKOUT_SHA, SETUP_UV_SHA]:
+        fails.append(f"{TRUSTED}: usesが信頼済み構成と不一致")
+    if _values(block, "run") != [FETCH_PR_RUN, VERIFY_PR_RUN]:
+        fails.append(f"{TRUSTED}: runが信頼済み構成と不一致")
+    live = _live(block)
+    if not any(line.startswith("fetch-depth: 0") for line in live):
+        fails.append(f"{TRUSTED}: fetch-depth: 0が無い")
+    if any(line.startswith(("continue-on-error:", "permissions:", "shell:")) for line in live):
+        fails.append(f"{TRUSTED}: 判定を弱める属性がある")
+    fails += _validate_action_pins(text, TRUSTED)
+    return fails
+
+
 def validate_ci(text: str) -> list[str]:
     fails: list[str] = []
     triggers = _trigger_keys(text)
@@ -96,17 +117,17 @@ def validate_ci(text: str) -> list[str]:
     blocks = rs.workflow_job_blocks(text)
     specs = {
         "checks": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5", "actions/cache@v4"],
-            "runs": ["uvx pre-commit run --all-files --show-diff-on-failure"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA, CACHE_SHA],
+            "runs": ["uvx --from pre-commit==4.6.0 pre-commit run --all-files --show-diff-on-failure"],
             "ifs": [],
         },
         "red-first": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA],
             "runs": ['uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"'],
             "ifs": ["if: github.event_name == 'pull_request'"],
         },
         "commit-msg-history": {
-            "uses": ["actions/checkout@v4", "astral-sh/setup-uv@v5"],
+            "uses": [CHECKOUT_SHA, SETUP_UV_SHA],
             "runs": ['uv run scripts/check_commit_msg.py --base "${{ github.event.pull_request.base.sha }}"'],
             "ifs": ["if: github.event_name == 'pull_request'"],
         },
@@ -117,13 +138,9 @@ def validate_ci(text: str) -> list[str]:
             fails.append(f"{CI}: 必須 job {job} が無い")
             continue
         live = _live(block)
-        # uses/run の完全一致は BINDING 区画を除いて比較する（区画内は採用列の充填が
-        # 正当に入る——充填済み採用先で必ず赤になる矛盾の是正）。if・弱体化属性・
-        # fetch-depth は区画内も含む全行で検査する（緩めない側は全文のまま）。
-        stripped = _strip_bindings(block)
-        if _values(stripped, "uses") != spec["uses"]:
+        if _values(block, "uses") != spec["uses"]:
             fails.append(f"{CI}: {job} の uses が信頼済み構成と不一致")
-        if _values(stripped, "run") != spec["runs"]:
+        if _values(block, "run") != spec["runs"]:
             fails.append(f"{CI}: {job} の run が信頼済み構成と不一致")
         if [line for line in live if line.startswith("if:")] != spec["ifs"]:
             fails.append(f"{CI}: {job} の if が信頼済み構成と不一致")
@@ -133,55 +150,41 @@ def validate_ci(text: str) -> list[str]:
             line.startswith("fetch-depth: 0") for line in live
         ):
             fails.append(f"{CI}: {job} に fetch-depth: 0 が無い")
+    fails += _validate_action_pins(text, CI)
     return fails
 
 
 def verify_scenarios(root: Path) -> int:
     original = rs.read_text(root, CI)
-    # 採用先では区画が充填済みで空マーカー対は存在しない——マーカー行を実ファイルから
-    # 特定し、区画を空に正規化した本文の上で binding シナリオを生成する。
-    lines = original.splitlines(keepends=True)
-    starts = [i for i, ln in enumerate(lines)
-              if _BINDING_START.match(ln) and "red-first-setup" in ln]
-    ends = [i for i, ln in enumerate(lines)
-            if _BINDING_END.match(ln) and "red-first-setup" in ln]
-    if len(starts) != 1 or len(ends) != 1 or ends[0] < starts[0]:
-        print("HARD:workflow-integrity-scenario red-first-setup 区画マーカーを特定できない",
-              file=sys.stderr)
-        return 1
-    start_marker, end_marker = lines[starts[0]], lines[ends[0]]
-    binding_empty = start_marker + end_marker
-    normalized = "".join(lines[:starts[0]]) + binding_empty + "".join(lines[ends[0] + 1:])
-
-    def _fill_binding(*steps: str) -> str:
-        return normalized.replace(
-            binding_empty,
-            start_marker + "".join(f"{s}\n" for s in steps) + end_marker,
-            1)
-
-    node_setup = ("      - uses: actions/setup-node@v4\n"
-                  "        with: { node-version: 22, cache: npm }")
+    unpinned_job = "\n  fake-check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
     cases = [
         ("正常", original, 0),
         ("checks削除", original.replace("  checks:\n", "  checks-removed:\n", 1), 1),
-        ("checks素通し", original.replace("      - run: uvx pre-commit run --all-files --show-diff-on-failure",
+        ("checks素通し", original.replace("      - run: uvx --from pre-commit==4.6.0 pre-commit run --all-files --show-diff-on-failure",
                                           "      - run: true", 1), 1),
         ("continue-on-error", original.replace("  checks:\n", "  checks:\n    continue-on-error: true\n", 1), 1),
         ("pull_request削除", original.replace("  pull_request:\n", "", 1), 1),
-        # BINDING 充填の許容と、区画を口実にした弱体化の遮断（充填済み採用先で必ず赤に
-        # なっていた矛盾の回帰）。弱体化属性は区画内にも掛かることを証明する。
-        ("binding充填(setup+run)", _fill_binding(node_setup, "      - run: npm ci"), 0),
-        ("binding内continue-on-error", _fill_binding("      - run: npm ci\n        continue-on-error: true"), 1),
-        ("binding終了マーカー削除", normalized.replace(binding_empty, start_marker, 1), 1),
+        ("言語jobのAction可変tag", original + unpinned_job, 1),
     ]
     bad = 0
     for name, text, minimum in cases:
         got = len(validate_ci(text))
-        # 期待0は「正当な構成が赤くなる」回帰（充填矛盾の型）を検出するため完全一致で判定
-        if not ((got == 0) if minimum == 0 else (got >= minimum)):
+        if got < minimum:
             bad += 1
-            op = "==" if minimum == 0 else ">="
-            print(f"HARD:workflow-integrity-scenario {name}: 期待fail{op}{minimum}・実際{got}",
+            print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
+                  file=sys.stderr)
+    trusted_original = rs.read_text(root, TRUSTED)
+    trusted_cases = [
+        ("trusted正常", trusted_original, 0),
+        ("trusted Action可変tag", trusted_original.replace(CHECKOUT_SHA, "actions/checkout@v4"), 1),
+        ("trusted検査素通し", trusted_original.replace(VERIFY_PR_RUN, "true"), 1),
+        ("trusted権限昇格", trusted_original.replace("contents: read", "contents: write"), 1),
+    ]
+    for name, text, minimum in trusted_cases:
+        got = len(validate_trusted(text))
+        if got < minimum:
+            bad += 1
+            print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
                   file=sys.stderr)
     base = {rel: rs.read_text(root, rel) for rel in TRUST_ROOTS}
     for name, rel in (("trusted workflow改変", TRUSTED), ("言語jobを含むCI全体改変", CI),
@@ -194,7 +197,7 @@ def verify_scenarios(root: Path) -> int:
                   file=sys.stderr)
     if bad:
         return 1
-    print(f"[workflow-integrity] verify シナリオ 全{len(cases) + 3}本 PASS")
+    print(f"[workflow-integrity] verify シナリオ 全{len(cases) + len(trusted_cases) + 3}本 PASS")
     return 0
 
 
@@ -215,15 +218,17 @@ def main(argv: list[str]) -> int:
         head_blobs = {rel: _blob(root, args.head, rel) for rel in TRUST_ROOTS}
         changed = changed_trust_roots(base_blobs, head_blobs)
         for rel in changed:
-                print(f"HARD:workflow-trust-root-changed {rel} workflowの信頼の根はPR自身では変更できない。"
-                      "人間レビュー後に required context を一時解除してPRマージし、直ちに戻す",
-                      file=sys.stderr)
+            print(f"HARD:workflow-trust-root-changed {rel} workflowの信頼の根はPR自身では変更できない。"
+                  "人間レビュー後に required context を一時解除してPRマージし、直ちに戻す",
+                  file=sys.stderr)
         if changed:
             return 1
         ci_text = head_blobs[CI]
+        trusted_text = head_blobs[TRUSTED]
     else:
         ci_text = rs.read_text(root, CI)
-    fails = validate_ci(ci_text)
+        trusted_text = rs.read_text(root, TRUSTED)
+    fails = validate_ci(ci_text) + validate_trusted(trusted_text)
     for message in fails:
         print(f"HARD:workflow-integrity {message}", file=sys.stderr)
     if fails:

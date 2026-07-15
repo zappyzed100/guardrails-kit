@@ -764,6 +764,8 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("orphan-file", "§3.3 コミット時", "var:ORPHAN_UNIVERSES", "どこからも import されない孤立ファイル警告（soft）"),
     ("gates-registry-drift", "§3.3 コミット時", "always", "この台帳自体と検査器コードの不一致検出（台帳の門）"),
     ("phase-table-drift", "§10 コミット時", "always", "Phase台帳とPhase見出しの不一致検出"),
+    ("codeowners-source-template", "§3.3 コミット時", "static:キット原本限定",
+     "原本の実効 CODEOWNERS と導入先 placeholder テンプレートの分離を強制"),
     # --- §3.4 commit-msg 検査 ---
     ("commit-msg-format", "§3.4 コミット時", "always", "コミットメッセージ形式（feat|fix|test|docs|refactor|chore:）"),
     ("fix-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS",

@@ -18,13 +18,14 @@ zip のままなら先に:  python3 -m zipfile -e guardrails-kit-*.zip .guardrai
     --check    ドリフト検出: 全ファイルが OK/KEPT/SKIPPED なら exit 0、それ以外は exit 1
                （CI から「導入先が新版に追随しているか」を機械判定できる）
 
-管理区画（v2.42〜v2.51 — Phase 44/49/53）: 充填先 Python 4ファイルと
+管理区画（v2.42〜v2.52 — Phase 44/49/53/54）: 充填先 Python 4ファイルと
 `.pre-commit-config.yaml` / `guardrails-ci.yml`（MANAGED_FILES）は
 `# >>> GUARDRAILS BINDING >>>` 〜 `# <<< GUARDRAILS BINDING <<<` 区画を持ち、UPGRADED は
 **区画の中身だけ既存を引き継いで**それ以外を新版にする（列充填の復元作業が消える）。
 区画マーカーが無い旧版は CONFLICT で停止する（充填を黙って失わない — G9）。
 YAML 系は複数の名前付き区画（`GUARDRAILS BINDING: <name>`）を同じ方式で継承する。
-CODEOWNERS は既存の実ownerを新版テンプレート全行へ差し戻して継承する。
+CODEOWNERS は `.guardrails/CODEOWNERS.template` を配布原本とし、既存の実ownerを新版
+テンプレート全行へ差し戻して継承する。キット配布元自身の `.github/CODEOWNERS` はコピーしない。
 
 ファイルごとの判定（表示ステータス）:
     OK         既存とバイト同一（何もしない・冪等）
@@ -92,6 +93,8 @@ GITATTRIBUTES = ".gitattributes"
 PRECOMMIT = ".pre-commit-config.yaml"
 SETTINGS = ".claude/settings.json"
 CODEX_HOOKS = ".codex/hooks.json"
+CODEOWNERS = ".github/CODEOWNERS"
+CODEOWNERS_TEMPLATE = ".guardrails/CODEOWNERS.template"
 GITIGNORE_BEGIN = "# >>> guardrails-kit >>>"
 # 旧版キットの痕跡（新パスへ移行済み。存在すれば NOTE で削除を促す——ブロックはしない）
 LEGACY_PATHS = [".github/workflows/ci.yml"]
@@ -108,6 +111,11 @@ MANAGED_FILES = {
     ".github/workflows/guardrails-ci.yml",
     ".github/CODEOWNERS",
 }
+
+
+def kit_source_rel(target_rel: str) -> str:
+    """配布先パスに対応するキット側原本。CODEOWNERSだけ配布元実設定と分離する。"""
+    return CODEOWNERS_TEMPLATE if target_rel == CODEOWNERS else target_rel
 
 
 def managed_inner(text: str) -> tuple[int, int] | None:
@@ -388,9 +396,13 @@ def main() -> int:
         if not p.is_file():
             continue
         rel = p.relative_to(kit_root).as_posix()
+        if rel in {CODEOWNERS, CODEOWNERS_TEMPLATE}:
+            continue
         if is_meta(rel) or any(part in EXCLUDE_DIRS for part in p.parts):
             continue
         manifest.append(rel)
+    manifest.append(CODEOWNERS)
+    manifest.sort()
 
     skips = set(args.skip)
     unknown_skips = sorted(skips - set(manifest))
@@ -405,7 +417,7 @@ def main() -> int:
     conflicts = False
 
     for rel in manifest:
-        src = kit_root / rel
+        src = kit_root / kit_source_rel(rel)
         dst = target / rel
         if rel in skips:
             results.append(("SKIPPED", rel, "指定により既存を維持"))

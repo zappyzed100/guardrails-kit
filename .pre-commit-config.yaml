@@ -4,10 +4,10 @@
 #   commit 時 = 衛生・秘密検出・STRUCTURE.md鮮度・構造検査・メッセージ検査（数秒）
 #   push   時 = テスト・静的解析（重い検査はここへ）
 #
-# 導入（§0）: uv tool install pre-commit → リポジトリで pre-commit install を1回。
+# 導入（§0）: uv tool install pre-commit==4.6.0 → リポジトリで pre-commit install を1回。
 # ※ default_install_hook_types を変えたら `pre-commit install` を再実行すること
 #   ——忘れると新フック種は「静かに」無効なまま（fail-open の典型）。
-# ※ rev の更新は `pre-commit autoupdate` で行い、コミットとして残す。
+# ※ rev は `pre-commit autoupdate` 後に公式タグをコミットSHAへ解決し、コミットとして残す。
 #
 # BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
 
@@ -21,7 +21,7 @@ default_stages: [pre-commit]
 repos:
   # ---- §3.1 衛生チェック（自動修正あり: 落ちたら該当ファイルを git add → 同じコミットを再実行）----
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -33,7 +33,7 @@ repos:
 
   # ---- §3.1 秘密検出（コミット前に止めることが最大の価値。偽陽性は当該行に gitleaks:allow）----
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4  # 導入時に `pre-commit autoupdate` で最新タグへ固定し直す
+    rev: 77c3c6a34b2577d71083442326c60b8fd58926ec  # v8.18.4
     hooks:
       - id: gitleaks
 
