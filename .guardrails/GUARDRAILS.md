@@ -1293,6 +1293,7 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 | 59 | required-status-checks rulesetのbypass監査 | §3.5 §11 Step 9 | ✅（v2.57 同梱） |
 | 60 | classic required checksのadmin適用監査 | §3.5 §11 Step 9 | ✅（v2.58 同梱） |
 | 61 | インストーラの外部GIT_INDEX_FILE混線防止 | §11 更新・配布 | ✅（v2.59 同梱） |
+| 62 | check_bootstrap Step 3のCI誤検知是正 | §3.5 §11 Step 3 | ✅（v2.60 同梱） |
 
 ### Phase 1 — Python(uv) 移植 ✅（v2キットに同梱済み）
 - `.python-version`・`scripts/repo_scan.py`・`generate_structure.py`・`check_structure.py`
@@ -2318,6 +2319,17 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
   読んで赤になり、実配布では誤ったマニフェストになり得た。
 - kitの追跡集合を読む subprocess とfixture内Git操作から外部`GIT_INDEX_FILE`を除去し、常に
   対象repository自身のindexを使う。一時indexを使う実pre-commit全走査を回帰経路にした。
+
+### Phase 62 — v2.60 同梱 ✅（check_bootstrap Step 3のCI誤検知是正）（G7/G9）
+
+- 発見: `assert_step_3`（Step 3 シム実在検査）は `checks` ジョブの `pre-commit run --all-files`
+  でも常に発火するが、CIのチェックアウトは `pre-commit install` を実行しないためシムは常に
+  不在——Step 3 ✅ の採用先は checks ジョブが構造的に必ず赤くなっていた。`check_structure.py`
+  の `check_hooks_installed` は同種のシム実在検査に既に CI 判定を持つが、`assert_step_3` への
+  伝播が漏れていた実装重複の是正漏れ（採用先 shift-solver-demo のキット更新PRで実測）。
+- `check_hooks_installed` と同じ `os.environ.get("CI")` 判定を `assert_step_3` に追加し、CIでは
+  シム検査をスキップする。シムを外した状態でローカル実行（`CI` 未設定）した際は従来どおり
+  検出することを実測し、ローカルの検出力を落とさないことを確認した。
 
 ### 保留（トリガー待ち。トリガー成立まで実装しない——ここが登録先）
 - **免除・接頭辞の監査指標**（G4——v2.35 登録）: レビュー規約に割り当て済みの乱用点検

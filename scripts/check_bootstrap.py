@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -125,6 +126,11 @@ def assert_step_3(root: Path, ctx: dict) -> list[str]:
     types = [t.strip() for t in (m.group(1).split(",") if m else []) if t.strip()]
     if not types:
         return ["default_install_hook_types が設定に無い（§7.6）"]
+    if os.environ.get("CI"):
+        # check_structure.py の check_hooks_installed と同じ判断: CI のチェックアウトには
+        # pre-commit install を実行しないためシムは常に不在（正常）。CI では checks
+        # ジョブの pre-commit run 自体が門であり、ローカルシムの有無は無関係。
+        return []
     try:
         proc = subprocess.run(["git", "rev-parse", "--git-path", "hooks"], cwd=root,
                               capture_output=True, text=True, timeout=30)
