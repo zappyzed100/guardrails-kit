@@ -49,6 +49,29 @@ def _live(block: str) -> list[str]:
             if line.strip() and not line.lstrip().startswith("#")]
 
 
+_BINDING_START = re.compile(r"^\s*#\s*>>> GUARDRAILS BINDING: \S+ >>>\s*$")
+_BINDING_END = re.compile(r"^\s*#\s*<<< GUARDRAILS BINDING: \S+ <<<\s*$")
+
+
+def _strip_bindings(block: str) -> str:
+    """BINDING管理区画（採用列が Step 0 で充填する区画——§11 表A）を落とす。
+
+    red-first の setup ステップ等、区画内の uses/run は採用列ごとに正当に異なるため
+    完全一致比較の対象から外す。SHA固定（_validate_action_pins）と弱体化属性の検査は
+    全文に対して行われるので、区画内も引き続き掛かる。開始マーカーだけで終了が無い
+    場合は以降すべてが落ち、区画外必須の run が消えて不一致になる（fail-closed）。"""
+    lines: list[str] = []
+    inside = False
+    for line in block.splitlines():
+        if _BINDING_START.match(line):
+            inside = True
+        elif _BINDING_END.match(line):
+            inside = False
+        elif not inside:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def _values(block: str, marker: str) -> list[str]:
     prefix = f"- {marker}:"
     values: list[str] = []
@@ -77,6 +100,9 @@ def _validate_action_pins(text: str, rel: str) -> list[str]:
     fails: list[str] = []
     for job, block in rs.workflow_job_blocks(text).items():
         for use in _values(block, "uses"):
+            # catalog の paste-block は `@SHA # v4` の行末コメント付きで出荷される——
+            # コメントを落とさないと SHA 固定済みの正当な充填を誤検知する
+            use = re.sub(r"\s+#.*$", "", use)
             if use.startswith("./"):
                 fails.append(f"{rel}: {job} のlocal ActionはPR head側の可変実装なので禁止: {use}")
                 continue
@@ -143,9 +169,13 @@ def validate_ci(text: str) -> list[str]:
             fails.append(f"{CI}: 必須 job {job} が無い")
             continue
         live = _live(block)
-        if _values(block, "uses") != spec["uses"]:
+        # uses/run の完全一致は BINDING 区画を除いて比較する（区画内は採用列の充填が
+        # 正当に入る——充填済み採用先で必ず赤になる矛盾の是正）。if・弱体化属性・
+        # fetch-depth は区画内も含む全行で検査する（緩めない側は全文のまま）。
+        stripped = _strip_bindings(block)
+        if _values(stripped, "uses") != spec["uses"]:
             fails.append(f"{CI}: {job} の uses が信頼済み構成と不一致")
-        if _values(block, "run") != spec["runs"]:
+        if _values(stripped, "run") != spec["runs"]:
             fails.append(f"{CI}: {job} の run が信頼済み構成と不一致")
         if [line for line in live if line.startswith("if:")] != spec["ifs"]:
             fails.append(f"{CI}: {job} の if が信頼済み構成と不一致")
@@ -166,6 +196,21 @@ def verify_scenarios(root: Path) -> int:
                           "      - uses: docker://alpine:latest\n")
     unsafe_local_job = ("\n  local-check:\n    runs-on: ubuntu-latest\n    steps:\n"
                         "      - uses: ./tools/custom-action\n")
+    binding_empty = ("      # >>> GUARDRAILS BINDING: red-first-setup >>>\n"
+                     "      # <<< GUARDRAILS BINDING: red-first-setup <<<\n")
+    if binding_empty not in original:
+        print("HARD:workflow-integrity-scenario red-first-setup 区画がテンプレートに無い",
+              file=sys.stderr)
+        return 1
+
+    def _fill_binding(*steps: str) -> str:
+        return original.replace(
+            binding_empty,
+            binding_empty.replace("      # <<<", "".join(f"{s}\n" for s in steps) + "      # <<<"),
+            1)
+
+    node_setup = ("      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\n"
+                  "        with: { node-version: 22, cache: npm }")
     cases = [
         ("正常", original, 0),
         ("checks削除", original.replace("  checks:\n", "  checks-removed:\n", 1), 1),
@@ -176,14 +221,27 @@ def verify_scenarios(root: Path) -> int:
         ("言語jobのAction可変tag", original + unpinned_job, 1),
         ("言語jobのDocker可変tag", original + mutable_docker_job, 1),
         ("CODEOWNERS保護外local Action", original + unsafe_local_job, 1),
+        # BINDING 充填の許容と、区画を口実にした弱体化の遮断（充填済み採用先で必ず赤に
+        # なっていた矛盾の回帰）。SHA固定・弱体化属性は区画内にも掛かることを証明する。
+        ("binding充填(SHA固定setup+run)", _fill_binding(node_setup, "      - run: npm ci"), 0),
+        ("binding内のAction可変tag", _fill_binding("      - uses: actions/setup-node@v4"), 1),
+        ("binding内continue-on-error", _fill_binding("      - run: npm ci\n        continue-on-error: true"), 1),
+        ("binding終了マーカー削除", original.replace(
+            "      # <<< GUARDRAILS BINDING: red-first-setup <<<\n", "", 1), 1),
     ]
     bad = 0
+
+    def _judge(name: str, got: int, minimum: int) -> int:
+        # 期待0は「正当な構成が赤くなる」回帰（充填矛盾の型）を検出するため完全一致で判定
+        if (got == 0) if minimum == 0 else (got >= minimum):
+            return 0
+        op = "==" if minimum == 0 else ">="
+        print(f"HARD:workflow-integrity-scenario {name}: 期待fail{op}{minimum}・実際{got}",
+              file=sys.stderr)
+        return 1
+
     for name, text, minimum in cases:
-        got = len(validate_ci(text))
-        if got < minimum:
-            bad += 1
-            print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
-                  file=sys.stderr)
+        bad += _judge(name, len(validate_ci(text)), minimum)
     trusted_original = rs.read_text(root, TRUSTED)
     trusted_cases = [
         ("trusted正常", trusted_original, 0),
@@ -192,11 +250,7 @@ def verify_scenarios(root: Path) -> int:
         ("trusted権限昇格", trusted_original.replace("contents: read", "contents: write"), 1),
     ]
     for name, text, minimum in trusted_cases:
-        got = len(validate_trusted(text))
-        if got < minimum:
-            bad += 1
-            print(f"HARD:workflow-integrity-scenario {name}: 期待fail>={minimum}・実際{got}",
-                  file=sys.stderr)
+        bad += _judge(name, len(validate_trusted(text)), minimum)
     base = {rel: rs.read_text(root, rel) for rel in TRUST_ROOTS}
     for name, rel in (("trusted workflow改変", TRUSTED), ("言語jobを含むCI全体改変", CI),
                       ("CODEOWNERS改変", CODEOWNERS)):
