@@ -1,0 +1,17 @@
+# >>> GUARDRAILS CODEOWNERS >>>
+# CODEOWNERS — 導入先のCI/ゲート信頼境界。Step 0で下記placeholderを実在人間ownerへ置換する。
+# 一人開発では本人を指定し、PRは権限を絞ったmachine user/GitHub Appに作らせる（Phase 54）。
+/.github/workflows/ @GUARDRAILS-HUMAN-REVIEWER
+/.github/CODEOWNERS @GUARDRAILS-HUMAN-REVIEWER
+/.pre-commit-config.yaml @GUARDRAILS-HUMAN-REVIEWER
+/.python-version @GUARDRAILS-HUMAN-REVIEWER
+/pyproject.toml @GUARDRAILS-HUMAN-REVIEWER
+/uv.lock @GUARDRAILS-HUMAN-REVIEWER
+/scripts/ @GUARDRAILS-HUMAN-REVIEWER
+/tests/ @GUARDRAILS-HUMAN-REVIEWER
+/.claude/hooks/ @GUARDRAILS-HUMAN-REVIEWER
+/.claude/settings.json @GUARDRAILS-HUMAN-REVIEWER
+/.codex/hooks/ @GUARDRAILS-HUMAN-REVIEWER
+/.codex/hooks.json @GUARDRAILS-HUMAN-REVIEWER
+/bindings/catalog.md @GUARDRAILS-HUMAN-REVIEWER
+# <<< GUARDRAILS CODEOWNERS <<<

@@ -1,5 +1,18 @@
-# CODEOWNERS — workflow信頼境界。Step 0で下記placeholderを、PR作成者とは別の
-# 実在する人間ユーザー/チームへ置換する（Phase 53）。
-/.github/workflows/ @GUARDRAILS-HUMAN-REVIEWER
-/scripts/check_workflow_integrity.py @GUARDRAILS-HUMAN-REVIEWER
-/.github/CODEOWNERS @GUARDRAILS-HUMAN-REVIEWER
+# >>> GUARDRAILS CODEOWNERS >>>
+# CODEOWNERS — guardrails-kit配布元のCI/ゲート信頼境界（導入先テンプレートは
+# .guardrails/CODEOWNERS.template。配布元の実設定とplaceholderを混ぜない — Phase 54）。
+/.github/workflows/ @zappyzed100
+/.github/CODEOWNERS @zappyzed100
+/.pre-commit-config.yaml @zappyzed100
+/.python-version @zappyzed100
+/pyproject.toml @zappyzed100
+/uv.lock @zappyzed100
+/scripts/ @zappyzed100
+/tests/ @zappyzed100
+/.claude/hooks/ @zappyzed100
+/.claude/settings.json @zappyzed100
+/.codex/hooks/ @zappyzed100
+/.codex/hooks.json @zappyzed100
+/bindings/catalog.md @zappyzed100
+# <<< GUARDRAILS CODEOWNERS <<<
+/.guardrails/CODEOWNERS.template @zappyzed100

@@ -198,8 +198,18 @@ GITHUB_ACTIONS_APP_ID = "15368"
 CODEOWNER_PLACEHOLDER = "@GUARDRAILS-HUMAN-REVIEWER"
 CODEOWNER_TRUST_PATHS = (
     "/.github/workflows/",
-    "/scripts/check_workflow_integrity.py",
     "/.github/CODEOWNERS",
+    "/.pre-commit-config.yaml",
+    "/.python-version",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/scripts/",
+    "/tests/",
+    "/.claude/hooks/",
+    "/.claude/settings.json",
+    "/.codex/hooks/",
+    "/.codex/hooks.json",
+    "/bindings/catalog.md",
 )
 
 
@@ -216,7 +226,8 @@ def codeowners_failures(text: str) -> list[str]:
     fails: list[str] = []
     for path in CODEOWNER_TRUST_PATHS:
         owners = owners_by_path.get(path, [])
-        if not owners or CODEOWNER_PLACEHOLDER in owners or not all(o.startswith("@") for o in owners):
+        valid = all(o.startswith("@") or re.fullmatch(r"[^@\s]+@[^@\s]+", o) for o in owners)
+        if not owners or CODEOWNER_PLACEHOLDER in owners or not valid:
             fails.append(f"CODEOWNERS の {path} に実在人間/チームownerが無い")
     return fails
 
@@ -228,7 +239,16 @@ def trusted_check_contexts(lines: list[str]) -> set[str]:
         parts = line.split("\t")
         if len(parts) == 2 and parts[1] == GITHUB_ACTIONS_APP_ID:
             out.add(parts[0])
+        elif len(parts) == 3 and parts[2] == GITHUB_ACTIONS_APP_ID:
+            out.add(parts[1])
     return out
+
+
+def _has_required_approval(value: str) -> bool:
+    try:
+        return int(value) >= 1
+    except ValueError:
+        return False
 
 
 def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
@@ -250,94 +270,136 @@ def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]
 
 def verify_required_checks(root: Path,
                            required_contexts: tuple[str, ...] = REQUIRED_CHECK_CONTEXTS) -> list[str]:
-    """Step 9 ④ の外部設定（bypass無しPR＋CODEOWNER＋全job required）を実測する（v2.35〜v2.51）。
+    """Step 9 ④ の外部設定（bypass無しPR＋承認1件＋CODEOWNER＋全job required）を実測する（v2.35〜v2.58）。
 
     ローカルの門もリポジトリ内の CI 定義も、この設定だけは代替できない——PR 必須と
     required checks はリポジトリ設定側にしか存在せず（§5・Phase 21「required の完成は
     リポジトリ設定まで」）、これが無ければ push 後 CI は違反を事後検知するだけになる。
 
-    fail の向きは2段:
-    - **検証できて不在** → 失敗（✅ の主張と実体の不一致＝虚偽✅ — fail-closed）。
-    - **検証そのものが不能**（GitHub 以外のリモート・gh 不在・オフライン・未認証・権限不足）
-      → 表示して素通し（fail-open＋表示 — Stop ゲート §2b と同じ契約。検証不能の日に
-      ブートストラップを止めない。CI の再監査は checks ジョブの GH_TOKEN で認証される）。
+    Step 9を✅にする監査なので、**不在も検証不能も失敗**。正の証拠を取れない状態で
+    完了扱いにすると外部防壁だけが静かに消える。rulesetsまたは旧来保護の片方から必要条件の
+    正の証拠が得られれば、他方の照会不能だけでは失敗にしない。
     照会はルールセット（/rules/branches——読み取り権限で可）と旧来ブランチ保護
     （admin 権限が要る——403 は照会不能・404 は「保護なし」の確定回答）の両系統を見る。
     """
     url = rs.git_config_get(root, "remote.origin.url") or ""
     m = _GITHUB_REMOTE_RE.search(url)
     if not m:
-        print("[bootstrap] Step 9 ④: GitHub リモートが無いため required checks は検証対象外"
-              "（ホスティング側の同等設定を手動確認 — §3.5）", file=sys.stderr)
-        return []
+        return ["Step 9外部設定を検証できるGitHub remoteが無い"
+                "（同等ホスティングを使う場合も検証器を実装するまで✅にしない — §3.5）"]
     gh = shutil.which("gh")
     if gh is None:
-        print("[bootstrap] Step 9 ④: gh CLI 不在のため required checks を検証できない"
-              "（表示して素通し——gh を導入して再実行すれば検証が効く — §3.5）", file=sys.stderr)
-        return []
+        return ["gh CLI不在のためStep 9外部設定を検証できない"
+                "（ghを導入・認証して再実行するまで✅にしない — §3.5）"]
     owner, repo = m.group(1), m.group(2)
     status, lines = _gh_api(gh, root, f"repos/{owner}/{repo}", ".default_branch")
     if status != "ok" or not lines:
-        print("[bootstrap] Step 9 ④: GitHub API に到達できず required checks を検証できない"
-              "（オフライン/未認証/権限不足——表示して素通し — §3.5）", file=sys.stderr)
-        return []
+        return ["GitHub APIに到達できずStep 9外部設定を検証できない"
+                "（オンライン・認証済み環境で再実行するまで✅にしない — §3.5）"]
     branch = lines[0]
+    external_owner_fails: list[str] = []
+    cost, owner_errors = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/codeowners/errors",
+        '.errors[]? | [.path, (.line|tostring), .kind, .suggestion] | @tsv')
+    if cost == "ok" and owner_errors:
+        detail = "; ".join(owner_errors)
+        external_owner_fails.append(
+            f"既定ブランチ {branch} の CODEOWNERS がGitHubで解決不能: {detail}"
+            "（ownerの存在・write権限・構文を直し、APIエラー0件を実測する — §11 Step 9 ④）")
+    elif cost == "absent":
+        external_owner_fails.append(
+            f"既定ブランチ {branch} にGitHubが読めるCODEOWNERSが無い"
+            "（CODEOWNERSはPRのbase branchに必要 — §11 Step 9 ④）")
+    elif cost != "ok":
+        external_owner_fails.append(
+            "CODEOWNERS errors APIを照会できずownerの実在・write権限を検証できない"
+            "（APIを照会できる権限で再実行するまで✅にしない — §3.5）")
     contexts: set[str] = set()
+    bypass_cache: dict[str, tuple[str, list[str]]] = {}
+
+    def ruleset_bypass(ruleset_id: str) -> tuple[str, list[str]]:
+        if ruleset_id not in bypass_cache:
+            bypass_cache[ruleset_id] = _gh_api(
+                gh, root, f"repos/{owner}/{repo}/rulesets/{ruleset_id}",
+                'if has("bypass_actors") then ([.bypass_actors[]?] | length | tostring) '
+                'else "UNAVAILABLE" end')
+        return bypass_cache[ruleset_id]
+
     rules_endpoint = f"repos/{owner}/{repo}/rules/branches/{branch}"
     st, ls = _gh_api(
         gh, root, rules_endpoint,
         '.[] | select(.type=="required_status_checks") | '
-        '.parameters.required_status_checks[] | [.context, (.integration_id // 0)] | @tsv')
+        '. as $rule | .parameters.required_status_checks[] | '
+        '[$rule.ruleset_id, .context, (.integration_id // 0)] | @tsv')
     rules_definitive = st == "ok"
     if rules_definitive:
-        contexts |= trusted_check_contexts(ls)
+        by_ruleset: dict[str, list[str]] = {}
+        for line in ls:
+            parts = line.split("\t")
+            if len(parts) == 3:
+                by_ruleset.setdefault(parts[0], []).append(line)
+        for ruleset_id, check_lines in by_ruleset.items():
+            dst, bypass = ruleset_bypass(ruleset_id)
+            if dst == "ok" and bypass == ["0"]:
+                contexts |= trusted_check_contexts(check_lines)
+            else:
+                rules_definitive = False
     prst, prls = _gh_api(
         gh, root, rules_endpoint,
         '.[] | select(.type=="pull_request") | '
         '[.ruleset_id, (.parameters.require_code_owner_review // false), '
         '(.parameters.dismiss_stale_reviews_on_push // false), '
-        '(.parameters.require_last_push_approval // false)] | @tsv')
+        '(.parameters.require_last_push_approval // false), '
+        '(.parameters.required_approving_review_count // 0)] | @tsv')
     ruleset_entries = []
     if prst == "ok":
         for line in prls:
             parts = line.split("\t")
-            if len(parts) == 4:
+            if len(parts) == 5:
                 ruleset_entries.append((parts[0], parts[1] == "true",
-                                        parts[2] == "true" or parts[3] == "true"))
+                                        parts[2] == "true" or parts[3] == "true",
+                                        _has_required_approval(parts[4])))
     rules_pr_definitive = prst == "ok"
     rules_pr_required = False
     if ruleset_entries:
         details_definitive = True
-        for ruleset_id, requires_codeowner, requires_fresh_review in ruleset_entries:
-            dst, bypass = _gh_api(
-                gh, root, f"repos/{owner}/{repo}/rulesets/{ruleset_id}",
-                'if has("bypass_actors") then ([.bypass_actors[]?] | length | tostring) '
-                'else "UNAVAILABLE" end')
+        aggregate_codeowner = False
+        aggregate_fresh = False
+        aggregate_approval = False
+        for ruleset_id, requires_codeowner, requires_fresh_review, requires_approval in ruleset_entries:
+            dst, bypass = ruleset_bypass(ruleset_id)
             if dst != "ok":
                 details_definitive = False
-            elif bypass == ["0"] and requires_codeowner and requires_fresh_review:
-                rules_pr_required = True
+            elif bypass == ["0"]:
+                # 有効なrulesetは合成される。bypassなしルール群に分散した要件も実効上は全て掛かる。
+                aggregate_codeowner |= requires_codeowner
+                aggregate_fresh |= requires_fresh_review
+                aggregate_approval |= requires_approval
             elif bypass == ["UNAVAILABLE"]:
                 details_definitive = False
+        rules_pr_required = aggregate_codeowner and aggregate_fresh and aggregate_approval
         rules_pr_definitive = details_definitive
     st2, ls2 = _gh_api(
         gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks",
         '.checks[] | [.context, (.app_id // 0)] | @tsv')
-    # 404 = 旧来保護が「無い」ことの確定回答（403/オフライン=照会不能とは意味が違う）
-    classic_definitive = st2 in ("ok", "absent")
-    if st2 == "ok":
-        contexts |= trusted_check_contexts(ls2)
     classic_pr_endpoint = f"repos/{owner}/{repo}/branches/{branch}/protection/required_pull_request_reviews"
     cpst, codeowners = _gh_api(
         gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection/required_pull_request_reviews",
         '[.require_code_owner_reviews, .dismiss_stale_reviews, '
-        '.require_last_push_approval] | @tsv')
-    classic_pr_definitive = cpst == "absent"
-    classic_pr_required = False
-    if cpst == "ok":
+        '.require_last_push_approval, .required_approving_review_count] | @tsv')
+    ast, admins = ("absent", [])
+    if st2 == "ok" or cpst == "ok":
         ast, admins = _gh_api(
             gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection",
             ".enforce_admins.enabled | tostring")
+    # 404 = 旧来保護が「無い」ことの確定回答（403/オフライン=照会不能とは意味が違う）。
+    # status checksを証拠に数える場合もadmin適用を要求する。
+    classic_definitive = st2 == "absent" or (st2 == "ok" and ast == "ok")
+    if st2 == "ok" and ast == "ok" and admins == ["true"]:
+        contexts |= trusted_check_contexts(ls2)
+    classic_pr_definitive = cpst == "absent"
+    classic_pr_required = False
+    if cpst == "ok":
         bst, bypass = _gh_api(
             gh, root, classic_pr_endpoint,
             '([.bypass_pull_request_allowances.users[]?, '
@@ -345,15 +407,16 @@ def verify_required_checks(root: Path,
             '.bypass_pull_request_allowances.apps[]?] | length | tostring)')
         classic_pr_definitive = ast == "ok" and bst == "ok"
         review_parts = codeowners[0].split("\t") if len(codeowners) == 1 else []
-        protected_review = (len(review_parts) == 3 and review_parts[0] == "true" and
-                            "true" in review_parts[1:])
+        protected_review = (len(review_parts) == 4 and review_parts[0] == "true" and
+                            "true" in review_parts[1:3]
+                            and _has_required_approval(review_parts[3]))
         classic_pr_required = (classic_pr_definitive and admins == ["true"] and
                                bypass == ["0"] and protected_review)
     # 最低線は4コア＋列固有job（v2.50）。「checks / commit-msg-history はローカルでも走るから
     # 重複」はローカルフックが動く経路にしか成立しない——CI を最終防衛線とする主張
     # （§5・README）の対象経路（Web 編集・フック未導入マシン）では、この2ジョブが唯一の
     # 強制点で、required でなければ赤のままマージできる。
-    fails: list[str] = []
+    fails: list[str] = list(external_owner_fails)
     missing = [j for j in required_contexts if j not in contexts]
     if missing and rules_definitive and classic_definitive:
         # 不在の断定は両系統の確定回答が揃った時だけ（v2.36 是正——片系統が照会不能のまま
@@ -366,14 +429,13 @@ def verify_required_checks(root: Path,
     elif missing:
         unchecked = [name for name, d in (("ルールセット", rules_definitive),
                                           ("旧来ブランチ保護", classic_definitive)) if not d]
-        print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、必須job"
-              f"（{', '.join(missing)}）の不在を断定できない（照会できた範囲には無い——表示して"
-              "素通し。CI の GITHUB_TOKEN は旧来ブランチ保護を照会できない（admin 必須）ため、"
-              "CI 再監査で確定判定を得るには rulesets 側で登録する — §3.5）", file=sys.stderr)
+        fails.append(f"{'・'.join(unchecked)}を照会できず、必須job（{', '.join(missing)}）の"
+                     "登録を証明できない（照会できた範囲にも無い。rulesets側へ登録するか、"
+                     "管理権限で再実行するまで✅にしない — §3.5）")
 
     if not (rules_pr_required or classic_pr_required):
         if rules_pr_definitive and classic_pr_definitive:
-            fails.append(f"{branch} に bypass無しのPR必須＋fresh CODEOWNERSレビュー必須ルールが無い（"
+            fails.append(f"{branch} に bypass無しのPR必須＋承認1件＋fresh CODEOWNERSレビュー必須ルールが無い（"
                          "required check名は別workflowから偽装可能なので、"
                          "workflow信頼境界には人間code owner reviewも必要。"
                          "既定ブランチへの直接 push を許すと "
@@ -382,10 +444,9 @@ def verify_required_checks(root: Path,
         else:
             unchecked = [name for name, d in (("ルールセット", rules_pr_definitive),
                                               ("旧来ブランチ保護", classic_pr_definitive)) if not d]
-            print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、bypass無しPR必須＋"
-                  "fresh CODEOWNERSレビュー必須ルールの不在を"
-                  "断定できない（照会できた範囲には無い——表示して素通し。CI 再監査で確定判定を"
-                  "得るには管理権限でrulesetのbypass一覧まで再監査する — §3.5）", file=sys.stderr)
+            fails.append(f"{'・'.join(unchecked)}を照会できず、bypass無しPR必須＋承認1件＋fresh "
+                         "CODEOWNERSレビューを証明できない（管理権限でrulesetのbypass一覧まで"
+                         "再監査するまで✅にしない — §3.5）")
     return fails
 
 
@@ -401,7 +462,7 @@ def assert_step_9(root: Path, ctx: dict) -> list[str]:
     if not language_jobs:
         fails.append("CI に列のテスト/解析ジョブが無い（通常workflowの3コアjob以外ゼロ——近似判定 §7.4）")
     required = REQUIRED_CHECK_CONTEXTS + tuple(sorted(language_jobs))
-    fails += verify_required_checks(root, required)  # ④ 外部設定の実測（v2.35〜v2.51）
+    fails += verify_required_checks(root, required)  # ④ 外部設定の実測（v2.35〜v2.58）
     return fails
 
 
@@ -421,6 +482,7 @@ def run_verify_scenarios() -> int:
     CLASSIC_PR = "classic/pr"
     CLASSIC_ADMIN = "classic/admin"
     CLASSIC_BYPASS = "classic/bypass"
+    CODEOWNERS_ERRORS = "codeowners/errors"
 
     def fake_api(responses: dict[str, tuple[str, list[str]]]):
         def _fake(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
@@ -428,7 +490,9 @@ def run_verify_scenarios() -> int:
                 key = RULE_PR if 'type=="pull_request"' in jq else RULE_CHECKS
                 return responses.get(key, ("unverifiable", []))
             if "/rulesets/" in endpoint:
-                return responses.get(RULE_DETAIL, ("unverifiable", []))
+                ruleset_id = endpoint.rsplit("/", 1)[-1]
+                return responses.get(f"{RULE_DETAIL}/{ruleset_id}",
+                                     responses.get(RULE_DETAIL, ("unverifiable", [])))
             if "required_pull_request_reviews" in endpoint:
                 key = CLASSIC_BYPASS if "bypass_pull_request_allowances" in jq else CLASSIC_PR
                 return responses.get(key, ("unverifiable", []))
@@ -436,79 +500,120 @@ def run_verify_scenarios() -> int:
                 return responses.get(CLASSIC_CHECKS, ("unverifiable", []))
             if endpoint.endswith("/protection"):
                 return responses.get(CLASSIC_ADMIN, ("unverifiable", []))
+            if endpoint.endswith("/codeowners/errors"):
+                return responses.get(CODEOWNERS_ERRORS, ("ok", []))
             return responses.get("", ("ok", ["main"]))  # 既定: default_branch 照会は成功
         return _fake
 
     ALL4 = list(REQUIRED_CHECK_CONTEXTS)
     def trusted(names: list[str]) -> list[str]:
-        return [f"{name}\t{GITHUB_ACTIONS_APP_ID}" for name in names]
+        return [f"201\t{name}\t{GITHUB_ACTIONS_APP_ID}" for name in names]
     ALL4_CHECKS = trusted(ALL4)
     # (名前, 期待fail件数, remote, gh有無, _gh_api の応答表, required contexts)
     scenarios = [
         ("rulesetsのみにbypass無しPR必須＋4コアジョブ（旧来保護は照会不能）", 0,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("unverifiable", []), CLASSIC_PR: ("unverifiable", [])}, ALL4),
+        ("ruleset複数にCODEOWNER・fresh・承認件数が分散しても合成して合格", 0,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\tfalse\tfalse\t1", "102\tfalse\ttrue\tfalse\t0"]),
+          RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("unverifiable", []), CLASSIC_PR: ("unverifiable", [])}, ALL4),
         ("旧来保護のみにadmin適用＋bypass無しPR必須＋4コアジョブ", 0,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("unverifiable", []), RULE_PR: ("unverifiable", []),
-          CLASSIC_CHECKS: ("ok", ALL4_CHECKS), CLASSIC_PR: ("ok", ["true\ttrue\tfalse"]),
+          CLASSIC_CHECKS: ("ok", ALL4_CHECKS), CLASSIC_PR: ("ok", ["true\ttrue\tfalse\t1"]),
           CLASSIC_ADMIN: ("ok", ["true"]), CLASSIC_BYPASS: ("ok", ["0"])}, ALL4),
         ("両系統とも確定回答で全部不在 → checks とPR必須の2件失敗", 2,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("ok", []), RULE_PR: ("ok", []),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
-        ("rulesets確定・空＋旧来保護は照会不能 → 断定せず素通し（v2.36 是正の回帰）", 0,
+        ("rulesets確定・空＋旧来保護は照会不能 → 正の証拠なしで失敗", 2,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("ok", []), RULE_PR: ("ok", []),
           CLASSIC_CHECKS: ("unverifiable", []), CLASSIC_PR: ("unverifiable", [])}, ALL4),
         ("両系統確定・red-first と checks のみ → 最低線4ジョブに不足で失敗", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", []), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
-          CLASSIC_CHECKS: ("ok", trusted(["red-first", "checks"])), CLASSIC_PR: ("absent", [])}, ALL4),
+         {RULE_CHECKS: ("ok", []), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("ok", [f"{name}\t{GITHUB_ACTIONS_APP_ID}"
+                                  for name in ["red-first", "checks"]]),
+          CLASSIC_PR: ("absent", [])}, ALL4),
         ("4コアジョブは揃うがPR必須なし → 失敗", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", []),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", []), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
         ("ruleset PR rule に bypass actor → PR必須不成立", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["1"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]),
+          f"{RULE_DETAIL}/201": ("ok", ["0"]), f"{RULE_DETAIL}/101": ("ok", ["1"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
         ("classic PR rule がadmin非適用 → PR必須不成立", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", []),
-          CLASSIC_CHECKS: ("ok", ALL4_CHECKS), CLASSIC_PR: ("ok", ["true\ttrue\tfalse"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", []), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("ok", ALL4_CHECKS), CLASSIC_PR: ("ok", ["true\ttrue\tfalse\t1"]),
           CLASSIC_ADMIN: ("ok", ["false"]), CLASSIC_BYPASS: ("ok", ["0"])}, ALL4),
+        ("classic checksがadmin非適用 → 必須contextの証拠に数えない", 1,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", []),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("ok", [f"{name}\t{GITHUB_ACTIONS_APP_ID}" for name in ALL4]),
+          CLASSIC_PR: ("absent", []), CLASSIC_ADMIN: ("ok", ["false"])}, ALL4),
         ("言語jobがrequired未登録 → 不足で失敗", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4 + ["test"]),
         ("ruleset PR必須だがcode owner review無し → 同名job偽装を防げず失敗", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\tfalse\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\tfalse\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
+        ("code owner review対象外のPRが承認0件でmerge可能 → 人間境界なしで失敗", 1,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t0"]), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
         ("required checksがany source → commit status偽装を防げず不足扱い", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", [f"{name}\t0" for name in ALL4]),
-          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+         {RULE_CHECKS: ("ok", [f"201\t{name}\t0" for name in ALL4]),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
-        ("ruleset bypass一覧が権限不足で非公開 → 0人と誤認せず検証不能", 0,
+        ("required checks側rulesetにbypass actor → 必須contextとして数えない", 1,
          "git@github.com:o/r.git", True,
-         {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse"]),
-          RULE_DETAIL: ("ok", ["UNAVAILABLE"]),
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]),
+          f"{RULE_DETAIL}/201": ("ok", ["1"]), f"{RULE_DETAIL}/101": ("ok", ["0"]),
+          CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
+        ("ruleset bypass一覧が権限不足で非公開 → 正の証拠なしで失敗", 1,
+         "git@github.com:o/r.git", True,
+        {RULE_CHECKS: ("ok", ALL4_CHECKS), RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]),
+          f"{RULE_DETAIL}/201": ("ok", ["0"]),
+          f"{RULE_DETAIL}/101": ("ok", ["UNAVAILABLE"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
         ("CODEOWNER承認が追加push後も残る → stale approvalで骨抜き可能", 1,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("ok", ALL4_CHECKS),
-          RULE_PR: ("ok", ["101\ttrue\tfalse\tfalse"]), RULE_DETAIL: ("ok", ["0"]),
+          RULE_PR: ("ok", ["101\ttrue\tfalse\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
           CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", [])}, ALL4),
-        ("red-first のみ確認・旧来保護は照会不能 → 不在を断定せず素通し", 0,
+        ("CODEOWNERSのownerがGitHubで解決不能 → ローカル表記だけで完了にしない", 1,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", []),
+          CODEOWNERS_ERRORS: ("ok", [".github/CODEOWNERS\t3\tUnknown owner\towner missing"])}, ALL4),
+        ("red-first のみ確認・旧来保護は照会不能 → checks/PRとも証明不能", 2,
          "git@github.com:o/r.git", True,
          {RULE_CHECKS: ("ok", trusted(["red-first"])), RULE_PR: ("ok", []),
           CLASSIC_CHECKS: ("unverifiable", []), CLASSIC_PR: ("unverifiable", [])}, ALL4),
-        ("gh 不在 → 表示して素通し", 0, "git@github.com:o/r.git", False, {}, ALL4),
-        ("GitHub 以外のリモート → 検証対象外", 0, "https://gitlab.com/o/r.git", True, {}, ALL4),
-        ("API 到達不能（default_branch 照会失敗）→ 表示して素通し", 0,
+        ("CODEOWNERS errors API照会不能 → ownerを証明できず失敗", 1,
+         "git@github.com:o/r.git", True,
+         {RULE_CHECKS: ("ok", ALL4_CHECKS),
+          RULE_PR: ("ok", ["101\ttrue\ttrue\tfalse\t1"]), RULE_DETAIL: ("ok", ["0"]),
+          CLASSIC_CHECKS: ("absent", []), CLASSIC_PR: ("absent", []),
+          CODEOWNERS_ERRORS: ("unverifiable", [])}, ALL4),
+        ("gh 不在 → 検証不能で失敗", 1, "git@github.com:o/r.git", False, {}, ALL4),
+        ("GitHub 以外のリモート → 検証器なしで失敗", 1, "https://gitlab.com/o/r.git", True, {}, ALL4),
+        ("API 到達不能（default_branch 照会失敗）→ 検証不能で失敗", 1,
          "git@github.com:o/r.git", True, {"": ("unverifiable", [])}, ALL4),
     ]
 
@@ -531,9 +636,11 @@ def run_verify_scenarios() -> int:
     valid_codeowners = "\n".join(f"{path} @human-reviewer" for path in CODEOWNER_TRUST_PATHS)
     codeowner_cases = [
         ("正常CODEOWNERS", valid_codeowners, 0),
-        ("placeholder残置", valid_codeowners.replace("@human-reviewer", CODEOWNER_PLACEHOLDER), 3),
+        ("placeholder残置", valid_codeowners.replace("@human-reviewer", CODEOWNER_PLACEHOLDER),
+         len(CODEOWNER_TRUST_PATHS)),
         ("workflow所有者欠落", valid_codeowners.replace(
             "/.github/workflows/ @human-reviewer\n", ""), 1),
+        ("GitHub対応のメールowner", valid_codeowners.replace("@human-reviewer", "human@example.com"), 0),
     ]
     for name, text, want in codeowner_cases:
         got = len(codeowners_failures(text))

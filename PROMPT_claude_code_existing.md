@@ -17,7 +17,7 @@
 - 中核不変条件: ★（壊れたら致命の性質。分かる範囲で — §12.6）
 - 外部I/O一覧: ★（分かる範囲で。Step -1b の棚卸しで補完される — §9.5）
 - GitHub リモート URL: ★（Step 9 の CI 実測に必要）
-- workflow信頼境界の人間CODEOWNER: ★（PR作成者とは別のGitHubユーザー/チーム。AI/アプリ不可）
+- workflow信頼境界の人間CODEOWNER: ★（一人開発なら本人。PR作者は別のmachine user/GitHub App）
 - 特記事項: ★（無ければ「なし」）
 
 ## 任務
@@ -147,7 +147,7 @@ Edit|Write|MultiEdit の2 matcher）/ Stop / SessionStart の4キー**と `permi
 - **Step 3（pre-commit 導入）**: 導入前にまず `uvx pre-commit run --all-files` 相当で
   衛生フックを全ファイルに1回当て、その差分だけを `chore: 衛生チェック一括適用` として
   単独コミットする（導入直後に無関係な差分でフックが落ち続けるのを防ぐ）。その後
-  `uv tool install pre-commit` → `pre-commit install` → 違反注入3種の実測（新規用と同じ）。
+  `uv tool install pre-commit==4.6.0` → `pre-commit install` → 違反注入3種の実測（新規用と同じ）。
   gitleaks が**現ツリー**で検出したものはこの Step で除去する。**履歴のみ**の検出は
   対処しない（Step -1b で報告済み——鍵ローテーション/履歴書き換えはユーザーの判断）。
 - **Step 4（迂回防止）**: `.claude/settings.json` が既にある場合は permissions.deny と

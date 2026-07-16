@@ -199,6 +199,55 @@ def check_phase_table(root: Path, out: list[Finding]) -> None:
                     f"Phase台帳と見出しが不一致（台帳欠落={missing}・見出し欠落={stale}）"))
 
 
+def check_codeowners_source_template(
+    root: Path, tracked: set[str], out: list[Finding]
+) -> None:
+    """原本自身の実効 CODEOWNERS と導入先テンプレートを混同させない（Phase 54）。"""
+    if not rs.is_kit_source_repo(tracked):
+        return
+    source_rel = ".github/CODEOWNERS"
+    template_rel = ".guardrails/CODEOWNERS.template"
+    if source_rel not in tracked or template_rel not in tracked:
+        out.append(("HARD", "codeowners-source-template", template_rel,
+                    "原本用 CODEOWNERS と導入先テンプレートの片方が無い"))
+        return
+
+    placeholder = "@GUARDRAILS-HUMAN-REVIEWER"
+    source = rs.read_text(root, source_rel)
+    template = rs.read_text(root, template_rel)
+    begin = "# >>> GUARDRAILS CODEOWNERS >>>"
+    end = "# <<< GUARDRAILS CODEOWNERS <<<"
+    if template.count(begin) != 1 or template.count(end) != 1 or not template.rstrip().endswith(end):
+        out.append(("HARD", "codeowners-source-template", template_rel,
+                    "配布用CODEOWNERS管理区画が一意でないか、後勝ちを保証する末尾配置でない"))
+    if source.count(begin) != 1 or source.count(end) != 1:
+        out.append(("HARD", "codeowners-source-template", source_rel,
+                    "配布元CODEOWNERSの管理区画マーカーが一意でない"))
+    if placeholder in source:
+        out.append(("HARD", "codeowners-source-template", source_rel,
+                    "キット原本の実効 CODEOWNERS に配布用 placeholder が残っている"))
+    if placeholder not in template:
+        out.append(("HARD", "codeowners-source-template", template_rel,
+                    "導入先で置換する reviewer placeholder が無い"))
+
+    def _owned_paths(text: str) -> set[str]:
+        paths: set[str] = set()
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            fields = stripped.split()
+            if len(fields) >= 2:
+                paths.add(fields[0])
+        return paths
+
+    source_only = {"/.guardrails/CODEOWNERS.template"}
+    if _owned_paths(source) != _owned_paths(template) | source_only:
+        out.append(("HARD", "codeowners-source-template", template_rel,
+                    "原本用と配布用 CODEOWNERS の保護対象パスが一致しない"
+                    "（原本だけはテンプレート自身も追加で保護する）"))
+
+
 def check_property_tests(texts: dict[str, str], out: list[Finding]) -> None:
     """性質形テストの存在検査（§9.6 missing-property-test — soft・Phase 43・v2.41）。
 
@@ -433,7 +482,7 @@ def check_hooks_installed(root: Path, tracked: set[str], out: list[Finding]) -> 
     elif not installed:
         out.append(("SOFT", "hooks-not-installed", f"{hooks_dir}",
                     "pre-commit のシムが未インストール（Step 3 の "
-                    "`uv tool install pre-commit` → `pre-commit install` で解消 — §11）"))
+                    "`uv tool install pre-commit==4.6.0` → `pre-commit install` で解消 — §11）"))
 
 
 def check_binding_dead_patterns(out: list[Finding]) -> None:
@@ -641,6 +690,7 @@ def main() -> int:
     check_property_tests(texts, findings)
     check_gates_registry(root, findings)
     check_phase_table(root, findings)
+    check_codeowners_source_template(root, tracked, findings)
     check_deprecated(texts, findings)
     check_log_calls(texts, findings)
     check_log_boundary_coverage(texts, findings)
