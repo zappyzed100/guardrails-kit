@@ -196,17 +196,26 @@ def verify_scenarios(root: Path) -> int:
                           "      - uses: docker://alpine:latest\n")
     unsafe_local_job = ("\n  local-check:\n    runs-on: ubuntu-latest\n    steps:\n"
                         "      - uses: ./tools/custom-action\n")
-    binding_empty = ("      # >>> GUARDRAILS BINDING: red-first-setup >>>\n"
-                     "      # <<< GUARDRAILS BINDING: red-first-setup <<<\n")
-    if binding_empty not in original:
-        print("HARD:workflow-integrity-scenario red-first-setup 区画がテンプレートに無い",
+    # 採用先では区画が充填済みで空マーカー対は存在しない——マーカー行を実ファイルから
+    # 特定し、区画を空に正規化した本文の上でシナリオを生成する（空区画前提だと、この
+    # 修正が救う対象である充填済み採用先でシナリオ検証自体が落ちる）。
+    lines = original.splitlines(keepends=True)
+    starts = [i for i, ln in enumerate(lines)
+              if _BINDING_START.match(ln) and "red-first-setup" in ln]
+    ends = [i for i, ln in enumerate(lines)
+            if _BINDING_END.match(ln) and "red-first-setup" in ln]
+    if len(starts) != 1 or len(ends) != 1 or ends[0] < starts[0]:
+        print("HARD:workflow-integrity-scenario red-first-setup 区画マーカーを特定できない",
               file=sys.stderr)
         return 1
+    start_marker, end_marker = lines[starts[0]], lines[ends[0]]
+    binding_empty = start_marker + end_marker
+    normalized = "".join(lines[:starts[0]]) + binding_empty + "".join(lines[ends[0] + 1:])
 
     def _fill_binding(*steps: str) -> str:
-        return original.replace(
+        return normalized.replace(
             binding_empty,
-            binding_empty.replace("      # <<<", "".join(f"{s}\n" for s in steps) + "      # <<<"),
+            start_marker + "".join(f"{s}\n" for s in steps) + end_marker,
             1)
 
     node_setup = ("      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\n"
@@ -226,8 +235,7 @@ def verify_scenarios(root: Path) -> int:
         ("binding充填(SHA固定setup+run)", _fill_binding(node_setup, "      - run: npm ci"), 0),
         ("binding内のAction可変tag", _fill_binding("      - uses: actions/setup-node@v4"), 1),
         ("binding内continue-on-error", _fill_binding("      - run: npm ci\n        continue-on-error: true"), 1),
-        ("binding終了マーカー削除", original.replace(
-            "      # <<< GUARDRAILS BINDING: red-first-setup <<<\n", "", 1), 1),
+        ("binding終了マーカー削除", normalized.replace(binding_empty, start_marker, 1), 1),
     ]
     bad = 0
 
