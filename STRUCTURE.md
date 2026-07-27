@@ -251,6 +251,7 @@
 - def check_installer_tokens
 - def check_binding_source
 - def check_soft_limits
+- def check_chronic_soft_violations
 - def check_orphans
 - def main
 
