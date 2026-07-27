@@ -1,0 +1,1203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>README_SETUP — ガードレール・キットの配置と使い方（旧 README_配置手順.md → README_SETUP.md → README_SETUP.html）</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --fg: #1b1f23;
+  --bg: #ffffff;
+  --muted: #57606a;
+  --border: #d0d7de;
+  --code-bg: #f6f8fa;
+  --link: #0969da;
+  --th-bg: #f6f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6edf3;
+    --bg: #0d1117;
+    --muted: #9198a1;
+    --border: #30363d;
+    --code-bg: #161b22;
+    --link: #4493f8;
+    --th-bg: #161b22;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", Meiryo, Helvetica, Arial, sans-serif;
+  line-height: 1.7;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 6rem;
+}
+h1, h2, h3, h4 { line-height: 1.35; scroll-margin-top: 1rem; }
+h1 {
+  font-size: 1.7rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+h2 {
+  font-size: 1.3rem;
+  margin-top: 2.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35rem;
+}
+h3 { font-size: 1.08rem; margin-top: 1.8rem; }
+p, ul, ol, table { max-width: 100%; }
+a { color: var(--link); }
+code {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  overflow-x: auto;
+  display: block;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--th-bg); }
+blockquote {
+  margin: 1rem 0;
+  padding: 0.2rem 1rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+</style>
+</head>
+<body>
+<h1 id="readme_setup-readme_md-readme_setupmd-readme_setuphtml">README_SETUP — ガードレール・キットの配置と使い方（旧 README_配置手順.md → README_SETUP.md → README_SETUP.html）</h1>
+<h2 id="_1">このキットの目的</h2>
+<p><strong>LLM エージェント（Claude Code / Codex / Cline 等）によるアプリ開発を、善意や心得ではなく機械的な仕組みで——
+出戻りなく・バグ少なく・速く——回せる状態にする</strong>こと。あらゆる言語・あらゆるアプリで
+使い回せることが前提。判定基準は3レンズ:</p>
+<ol>
+<li><strong>LLMにとって取り扱いやすい</strong>（決定性・一発到達・文脈最小・機械可読な即時フィードバック・単一の正）</li>
+<li><strong>バグが減る</strong>（変更面の最小化・不変条件の機械強制・非決定の検疫・沈黙の禁止・回帰の複利）</li>
+<li><strong>開発時間が短縮できる</strong>（ループ秒速・質問の前払い・移植の定数時間）</li>
+<li><strong>意図の保存</strong>（意図の複利——新しい構造には設計根拠が同コミットで残る。v2.8 新設の第4レンズ）</li>
+</ol>
+<p>この3＋1レンズを判定可能な14条に固定したのが <strong><code>.guardrails/GOALS.md</code>（目標の正本）</strong>、それを実現する
+機構の契約が <strong><code>.guardrails/GUARDRAILS.md</code>（契約の正本）</strong>、言語固有の具象値が
+<strong><code>bindings/catalog.md</code>（バインディングの正本）</strong>——という三層構成。迷ったらこの順で読む。</p>
+<h2 id="_2">このキットの中身</h2>
+<p>このキット（v2）は .guardrails/GUARDRAILS.md の各機構（§1〜§9・§12）の<strong>言語なし実装</strong>です。
+言語固有値は <code>bindings/catalog.md</code> の検証済み列（TS/React・Python・Dart/Flutter・Rust）
+に集約してあり、Claude Code が .guardrails/GUARDRAILS.md §11 の手順で採用列を充填します。ユーザーがやることは
+<strong>「1. 配置 → 2. 前提ツール → 3. プロンプト貼り付け」の3つ</strong>です。</p>
+<p>プロンプトは対象リポジトリの状態で使い分けます:</p>
+<table>
+<thead>
+<tr>
+<th>対象</th>
+<th>使うプロンプト</th>
+<th>違い</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>まっさらな新規リポジトリ</td>
+<td><code>PROMPT_claude_code.md</code></td>
+<td>骨格を作り、ゲートを先に立て、違反ゼロから始める</td>
+</tr>
+<tr>
+<td>既にコードがあるリポジトリ</td>
+<td><code>PROMPT_claude_code_existing.md</code></td>
+<td>棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ</td>
+</tr>
+<tr>
+<td>導入済みリポジトリの新版更新</td>
+<td><code>PROMPT_claude_code_update.md</code></td>
+<td>インストーラ再実行（UPGRADED——git 履歴が安全網）→ 消えた充填を履歴から復元 → §10 の Phase 見出し diff で新しい門を列挙 → 門ごとに違反注入 DoD</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v262-htmlhtml-guardrailsgoalsmd-g3">v2.62 での変更点（人間向け文書のHTML化規約を追加し、本書自体をHTML化。根拠は <code>.guardrails/GOALS.md</code> の G3、機械検査は追加せず）</h2>
+<ul>
+<li><strong>文書の書式規約を新設</strong>（AGENTS.md §4・.guardrails/GUARDRAILS.md §6）: 人間だけが読む文書
+  （導入手順・調査ノート・変更履歴）は HTML、§記法・grep索引・自動生成で構造的に参照される
+  契約文書（AGENTS.md・CLAUDE.md・.guardrails/GUARDRAILS.md・.guardrails/GOALS.md・
+  bindings/catalog.md・STRUCTURE.md）は Markdown のまま据え置く。ルート README.md は
+  GitHub のリポジトリトップページ自動プレビューのため例外的に Markdown のまま。
+  判定可能な G に一対一で対応しない純粋な執筆スタイルのため、.guardrails/GOALS.md への
+  条項追加はしない（「良さそう」だけでは足さない、という同ファイルの運用ルールに従う）。</li>
+<li><strong>本書を <code>README_SETUP.md</code> から <code>README_SETUP.html</code> へ改名</strong>（新規則の適用第一号）:
+  install_kit.py の META_FILES 記載を更新（配置対象からの除外は元々ルート <code>README*</code>
+  プレフィックス一致でも成立しており機能面の変更はない）。相互参照先（README.md /
+  PLAN.md / .guardrails/GUARDRAILS.md）のファイル名表記も更新した。</li>
+</ul>
+<h2 id="v261-soft-guardrailsgoalsmd-g3g9">v2.61 での変更点（フォルダ構成規約を関心事分割へ再定義し、慢性化したsoft違反の検出を追加。根拠は <code>.guardrails/GOALS.md</code> の G3/G9）</h2>
+<ul>
+<li>AGENTS.md §1/§2（ファイル500行・フォルダ7ファイルの規約）の軸を行数/個数から関心事へ
+  再定義した。500行/7ファイルは分割要否の代理指標であり、結合した意味論（例: 同じ制約族の
+  モデル構築とペナルティ計上）を機械的な行数分割で引き裂かない方針を明文化した。</li>
+<li>soft <code>chronic-soft-violation</code> を追加した。<code>file-too-long</code> / <code>dir-too-crowded</code> が
+  ローカルの違反ログ（<code>.guardrails/violations.jsonl</code>・§3.6）上で既定5回以上の
+  <code>check-structure</code> 実行にまたがって出続けている箇所を検出する——関心事分割によって
+  1回の見送りを許容した代わりに、無理由の放置が積み重なる経路を塞ぐ。</li>
+</ul>
+<h2 id="v260-check_bootstrap-step-3ci-guardrailsgoalsmd-g7g9">v2.60 での変更点（check_bootstrap Step 3のCI誤検知を是正。根拠は <code>.guardrails/GOALS.md</code> の G7/G9）</h2>
+<ul>
+<li><code>checks</code> ジョブの <code>pre-commit run --all-files</code> は <code>pre-commit install</code> を経ないため、Step 3 が
+  ✅ の採用先は <code>assert_step_3</code> のシム実在検査が構造的に必ず赤化していた。</li>
+<li><code>check_structure.py</code> の <code>check_hooks_installed</code> と同じ <code>CI</code> 環境変数判定を <code>assert_step_3</code> にも
+  揃え、CI ではシム検査をスキップする（ローカルでのシム未インストール検出は従来どおり維持）。</li>
+</ul>
+<h2 id="v259-git-index-guardrailsgoalsmd-g1g7g9">v2.59 での変更点（インストーラのGit index隔離。根拠は <code>.guardrails/GOALS.md</code> の G1/G7/G9）</h2>
+<ul>
+<li>呼出元の<code>GIT_INDEX_FILE</code>が直インストールへ混入し、別repositoryの追跡集合を配布する欠陥を修正。</li>
+<li>kitマニフェスト取得とfixture Git操作は対象repository自身のindexだけを使う。</li>
+<li>一時indexを使う全pre-commit走査でも未追跡ファイル非流出テストが通ることを確認する。</li>
+</ul>
+<h2 id="v258-classic-required-checksadmin-guardrailsgoalsmd-g7g9g10">v2.58 での変更点（classic required checksのadmin適用監査。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>旧来ブランチ保護からrequired checksを採る場合も<code>enforce_admins=true</code>を必須化した。</li>
+<li>PRレビュー設定が別rulesetにある構成でも、classic checksのadmin迂回を見逃さない。</li>
+<li>classic checksだけadmin非適用の分離シナリオを追加した。</li>
+</ul>
+<h2 id="v257-required-checksrulesetbypass-guardrailsgoalsmd-g7g9g10">v2.57 での変更点（required checks側rulesetのbypass監査。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>PRルールだけでなく、required status checksを定義したruleset自身のbypass actorも検査する。</li>
+<li>bypassなしと確認できたruleset由来のcontextだけをrequired checks登録済みとして数える。</li>
+<li>status側だけbypassあり・PR側は安全、という分離構成の違反注入を追加した。</li>
+</ul>
+<h2 id="v256-pr-guardrailsgoalsmd-g7g9g10">v2.56 での変更点（全PRの人間承認境界。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>code owner対象外の通常変更がmachine userだけでmergeできた穴を修正し、全PRで承認1件以上を要求。</li>
+<li>ゲート関連パスは従来のCODEOWNER承認も必要なので、通常PRと信頼境界変更を二層で扱う。</li>
+<li>rulesets/旧来保護の承認件数を外部APIで実測し、0件設定を未保護として失敗させる。</li>
+<li>複数のbypassなしrulesetに分散したCODEOWNER・fresh・承認件数は実効ルールどおり合成評価する。</li>
+</ul>
+<h2 id="v255-dockerlocal-action-guardrailsgoalsmd-g7g9g13">v2.55 での変更点（Docker/local Action参照境界。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G13）</h2>
+<ul>
+<li><code>docker://image:tag</code>を固定済みと誤認していた穴を修正し、Docker ActionはSHA-256 digest必須にした。</li>
+<li>local ActionはPR head側の可変実装を間接実行できるためrequired CIでは禁止する。</li>
+<li>可変Docker tag・local Actionをworkflow integrityの違反注入へ追加した。</li>
+</ul>
+<h2 id="v254-step-9fail-closed-guardrailsgoalsmd-g7g9g10">v2.54 での変更点（Step 9検証不能のfail-closed化。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>Step 9を✅にする外部監査で、gh不在・offline・API権限不足を表示だけで成功にしていた矛盾を修正。</li>
+<li>required checks、bypass無しPR、fresh CODEOWNER review、owner解決の正の証拠が取れない場合も失敗する。</li>
+<li>rulesets/旧来保護の片方で全条件を証明できれば、他方の照会不能だけでは失敗にしない。</li>
+</ul>
+<h2 id="v253-codeownersowner-guardrailsgoalsmd-g1g5g7g9">v2.53 での変更点（CODEOWNERS更新保持とowner解決実測。根拠は <code>.guardrails/GOALS.md</code> の G1/G5/G7/G9）</h2>
+<ul>
+<li>CODEOWNERS更新が既存の独自規則を消し、最初のowner 1名へ全パスを平坦化する欠陥を修正。
+  専用管理区画で独自規則・複数owner・パス別ownerを保持する。</li>
+<li>GitHubの「最後に一致した規則が勝つ」仕様に合わせ、guardrails管理区画を常に末尾へ置く。</li>
+<li>Step 9は<code>codeowners/errors</code> APIも実測し、存在しないowner・write権限不足・構文エラーを
+  ローカルの見た目だけで完了扱いにしない。メール形式ownerも正当に受理する。</li>
+<li>作業checkoutからの直インストールはGit追跡ファイルだけを配布し、未追跡の計画メモ・秘密・
+  一時生成物を対象リポジトリへ漏らさない。<code>.git</code>の無いzip展開時だけ全ファイルを走査する。</li>
+</ul>
+<h2 id="v252-codeowners-guardrailsgoalsmd-g5g7g9g13">v2.52 での変更点（CODEOWNERS分離と供給網固定。根拠は <code>.guardrails/GOALS.md</code> の G5/G7/G9/G13）</h2>
+<ul>
+<li>キット配布元の実効 <code>.github/CODEOWNERS</code> と、導入先へ配るplaceholder入り
+  <code>.guardrails/CODEOWNERS.template</code> を分離。インストーラは後者だけを導入先の
+  <code>.github/CODEOWNERS</code> へ写し、構造検査が再混同をhardで止める。</li>
+<li>trusted/CI workflowとcatalog全列の外部ActionをコミットSHAへ固定。存在しなかった
+  <code>supabase/setup-cli@v1</code> は公式v3へ是正した。</li>
+<li>trusted jobのpre-commit本体を4.6.0、remote hookをコミットSHAへ固定し、Actionの内側で
+  実行ツールが最新版へ漂う経路も閉じた。integrityシナリオはtrusted workflow自体の骨抜きも検証する。</li>
+<li>PR headで走る検査スクリプトやコーパスだけをno-op化する穴を塞ぐため、pre-commit設定・
+  scripts/tests・フック設定・Python実行環境もCODEOWNERS対象へ拡張した。</li>
+</ul>
+<h2 id="v251-required-check-guardrailsgoalsmd-g7g9g10">v2.51 での変更点（required check名偽装の封鎖。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>GitHubのrequired status checkはworkflow/eventを識別せずjob名だけを見るため、PR側の別workflowが
+  同名jobを報告できる穴を確認。<code>workflow-integrity</code> 単独を完全な信頼境界とする記述を撤回した。</li>
+<li><code>.github/CODEOWNERS</code> でworkflow全体・integrity検査器・CODEOWNERS自身を人間ownerへ割り当てる。
+  一人開発ではPR作者をmachine user/GitHub Appへ分離し、code owner review設定まで実測する。</li>
+<li>CODEOWNERSのplaceholder残置・対象行欠落・サーバー側code owner review無効を回帰シナリオ化。</li>
+<li>required checksの期待送信元をGitHub Actions Appへ固定し、<code>any source</code>のcommit status偽装を拒否。
+  権限不足でrulesetの<code>bypass_actors</code>が省略された応答を「0人」と誤認するfail-openも修正した。</li>
+<li>CODEOWNER承認後の追加pushで古い承認を再利用する経路を塞ぐため、stale review失効または
+  last push approvalも外部監査の必須条件へ追加した。</li>
+</ul>
+<h2 id="v250-workflow-guardrailsgoalsmd-g7g9g10">v2.50 での変更点（workflow自己改変と監査漏れの封鎖。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li><code>pull_request_target</code> で既定ブランチのコードだけを実行する <code>workflow-integrity</code> を追加。
+  PR head は checkout / 実行せず Git blob として読み、信頼済みworkflow・検査器・CI workflow
+  全体の変更を拒否する。言語別jobを <code>run: true</code> にする自己改変も通らない。</li>
+<li>required checks は4コアjobと採用した全言語別jobを要求し、ruleset bypass と旧来保護の
+  admin非強制も未保護として検出する。CIの <code>push</code> は既定ブランチ名に依存しない。</li>
+<li>workflow更新時だけは人間レビュー後に <code>workflow-integrity</code> のrequired指定を一時解除し、
+  同じPRをmerge後ただちに戻す。直接pushは使わない。</li>
+</ul>
+<h2 id="v249-pr-guardrailsgoalsmd-g7g9g10">v2.49 での変更点（PR 必須契約の曖昧さ解消。根拠は <code>.guardrails/GOALS.md</code> の G7/G9/G10）</h2>
+<ul>
+<li>新規向けプロンプトだけが「Step 9 以降は 1 PR」としていた矛盾を解消し、全経路を
+  <strong>1 Step = 1コミット = 1ブランチ = 1PR</strong>へ統一。既定ブランチへの直接 push を禁止した。</li>
+<li>PR は好みのワークフローではなく、Web 編集・フック未導入マシンの変更に required checks を
+  <strong>合流前</strong>に掛ける境界。<code>push</code> は合流後の事後検知なので代替にならない、と正本・
+  README・テンプレへ明記した。</li>
+<li>Step 9 の外部設定監査を、当時の3コア required checks の登録だけでなく「PR 必須」ルールまで
+  実測するよう拡張。リポジトリ内の心得だけで必須を名乗る監査空白を塞いだ。</li>
+</ul>
+<h2 id="v225-guardrailsgoalsmd-g">v2.25 での変更点（非決定性テストの免除機構。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><code>test-sleep</code>/<code>test-nondeterminism</code>/<code>test-network</code> に免除経路を追加した回（正本:
+.guardrails/GUARDRAILS.md §9.5・§10 Phase 35）。実タイミング競合の再現テストのように、非決定性の
+再現そのものがテストの本質という正当なケースがあり、<code>NO-LOG:</code>（§8.4）・
+<code>RED-FIRST-EXEMPT:</code>（§5）と同型の「存在検査のみ・理由必須」境界を持つ
+<code>NONDETERMINISM-EXEMPT: 理由</code> コメントで免除できるようにした。</p>
+<ul>
+<li>免除は該当行の前後3行以内（<code>NONDETERMINISM_EXEMPT_WINDOW</code>・列上書き可）——3規則が
+  同一テストで同時に発火しうるため、単一のコメントでまとめて免除できる設計。</li>
+<li><code>test-calls-solver-direct</code> は対象外（既に別の免除経路を持つ）。</li>
+<li>詳細: <code>.guardrails/CUSTOMIZE.md</code> §5「個別の逃げ道」に追記。</li>
+</ul>
+<h2 id="v224-v223-guardrailsgoalsmd-g">v2.24 での変更点（v2.23 からの完遂＋是正。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>v2.23で見送った残り4フックの言語統一を完遂した回（正本: .guardrails/GUARDRAILS.md §10 Phase 34）。
+あわせて、フック本体をPython化しても呼び出すツールが遅ければ効果が薄いという観点から、
+post-editフックが呼ぶ外部ツールの呼び方も見直した。</p>
+<ul>
+<li><strong><code>stop_incomplete_guard.py</code>・<code>session_baseline.py</code>・<code>post_edit_format.py</code>・
+  <code>post_edit_lint.py</code></strong>: 全てPython化。実測は698ms→157ms（3.5倍）・356ms→171ms
+  （2.1倍）等。<code>session_baseline.py</code>は移植直後にCRLF/LF不一致（Windowsでの
+  <code>write_text</code>既定動作）を検出・修正——bash版とのバイト完全一致を確認。</li>
+<li><strong>post_edit フックが呼ぶツールの直接呼び出し化</strong>（<code>bindings/catalog.md</code>「post_edit
+  フックの速度3原則」）: <code>npx prettier</code>（実測約900ms/回・ローカルinstall済みでも）を
+  <code>node_modules/.bin/prettier</code>直接呼び出し（約240ms/回）へ、<code>uvx ruff</code>（約218ms/回）を
+  <code>uv tool install ruff</code>後の直接呼び出し（約156ms/回）へ変更。<strong>この差はフック本体の
+  言語移行そのものより実利用への影響が大きい</strong>——ホットパスの支配コストは「ガードの
+  コード」ではなく「ガードが待つツール」だった。</li>
+<li><strong>Biomeを ts-react-web 列の代替として調査・記録</strong>（採用はせず）: 公開ベンチマークで
+  ESLint比10〜35倍・Prettier比35倍という報告を確認し出典つきで記録。単一バイナリで
+  lint+format+import整理を1execに収められる点も記録したが、既定（prettier+eslint）は
+  維持——乗り換えは各プロジェクトの判断（列の版上げで記録する設計は変えない）。</li>
+<li><strong>rust列の整形を<code>cargo fmt</code>（クレート単位・cwd切替要）から<code>rustfmt {file}</code>
+  （単一ファイル直接）へ変更</strong>: DISPATCH辞書が素のargv実行のみを想定するための対応
+  だが、post-editの「1ファイル・数秒予算」という契約そのものにも単一ファイル直接
+  呼び出しの方が合っている。</li>
+<li>全6フックがPython化で統一——<code>.claude/hooks/</code>配下にbash実装は0本になった。</li>
+</ul>
+<h2 id="v223-v222-guardrailsgoalsmd-g">v2.23 での変更点（v2.22 からの言語移行。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>「他にも同種の遅い実装は無いか」「そもそもbash採用に根拠はあるか」という観点から
+全フックを棚卸しし、<code>guard_git_bypass.sh</code>（v2.22是正後も jq・sed の2プロセスが
+残存）と <code>guard_human_wip.sh</code> を Python へ完全移行した回（正本: .guardrails/GUARDRAILS.md §10 Phase 33）。</p>
+<ul>
+<li><strong>Go/Rustも候補に入れてセットアップ時に最速を実測選択する案は不採用</strong>: 実装が
+  言語の数だけ増えG5「単一の正」に反する・Step 0にコンパイル/ベンチマーク工程が
+  増えG13「移植の定数時間」に反する・Go/Rustのツールチェーンがキット自体の新規
+  必須依存になり重複排除ゲート違反（キットの必須言語ツールは <code>uv</code> のみ）。</li>
+<li><strong><code>guard_git_bypass.py</code></strong>: jq/sed/grep/tr の子プロセスが標準ライブラリで完結し
+  git status 呼び出し以外はゼロに。実測 約243ms/回→約150ms/回。コーパス全74行を
+  10回連続PASS。書き換え中にPython版own のバグ2件を発見・修正（stdinのUTF-8未設定・
+  検証ハーネスの相対パス問題）——コーパスと手動比較それぞれが実際に機能した実例。</li>
+<li><strong><code>guard_human_wip.py</code></strong>: 専用コーパスが無いため6ケースの手動比較で新旧完全一致を
+  確認。実測 約593ms/回→約230ms/回（2.6倍）。.guardrails/GUARDRAILS.md §2の保留トリガー
+  （このフックの改修発生）が本コミットで発火したことを明記——恒久コーパス化
+  （<code>check_guard_corpus.py --hook</code> 拡張）は次回以降の宿題として残す。</li>
+<li><strong>未着手のまま残したもの</strong>: <code>stop_incomplete_guard.sh</code>・<code>session_baseline.sh</code>・
+  <code>post_edit_format.sh</code>・<code>post_edit_lint.sh</code>（優先度が低いと判断——理由は
+  .guardrails/GUARDRAILS.md §10 Phase 33参照）。</li>
+</ul>
+<h2 id="v222-v221-guardrailsgoalsmd-g">v2.22 での変更点（v2.21 からの是正。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>導入先プロジェクト（Windows・32論理コア機）で <code>guard-corpus</code> フックが pre-commit
+チェーンの中で断続的にタイムアウトする事例が発生し、原因を実測で特定・是正した回
+（正本: .guardrails/GUARDRAILS.md §7.7・§10 Phase 32）。</p>
+<ul>
+<li><strong><code>check_guard_corpus.py</code> の並列度上限を32→12へ是正</strong>（G11）: 「物理コア数より
+  多めが有利」という旧前提を、32コア機での実測（1〜48並列を計測）で反証した——
+  8並列で頭打ち、旧上限32は8並列と同等かそれ以下。</li>
+<li><strong><code>guard_git_bypass.sh</code> 本体を bash 組み込み構文へ書き換え</strong>（G7）: 1回の呼び出しで
+  <code>grep</code>/<code>sed</code>/<code>tr</code>/<code>jq</code> が10〜18回起動していたのが根本原因（約1073ms/回）。bash 組み込みの
+  <code>[[ =~ ]]</code>／パターン展開へ置き換え、jq・sed の2個だけ残置——約243ms/回（4.4倍）に短縮。
+  <code>\b</code>（単語境界）が MSYS2/Windows の bash 正規表現エンジンで非対応と判明したため、
+  POSIX標準クラスのみの自前実装（<code>word_present()</code>）に置き換えた。</li>
+<li><strong>書き換え直後、コーパス（<code>tests/guard_corpus.tsv</code>）が実際に36/74行の回帰を検出</strong>——
+  <code>\b</code>非対応によりDENYがALLOWへ後退する規模の回帰で、コーパス自身が門番の改修における
+  安全網として機能した実例（G10）。全74行PASSを5回連続確認してから確定。</li>
+<li><strong>性能予算（§7.7）を実測に合わせて是正</strong>: 「全行2秒以内」は複数コアでも達成不能な
+  数字だったと判明——「全行10秒以内（目標5秒）」へ変更。実測は5〜8秒。</li>
+</ul>
+<h2 id="v221-v220-guardrailsgoalsmd-g">v2.21 での変更点（v2.20 からの整備。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>セッション内の対話——「導入後にカスタムできる項目（数値調整・サンプル差し替え・
+トリガー待ち機能・規則の一時停止・逃げ道・MCP追加・規約文書の編集）はユーザーに
+通知されるのか」という問いから出発。答えは「されない」だった——機構は揃っているが、
+存在を知らせる導線が無いという穴（G9）。</p>
+<ul>
+<li><strong>新規 <code>.guardrails/CUSTOMIZE.md</code></strong>（root）: 導入後にカスタムできる7項目の<strong>索引</strong>。中身を
+  複製せず、.guardrails/GUARDRAILS.md の該当節へのポインタに徹する（複製は正本の分裂——Serena の
+  <code>.serena/memories</code> 不採用と同じ理由でG5違反）。</li>
+<li><strong>導線を3箇所に追加</strong>: <code>install_kit.py</code> の完了メッセージ／<code>.guardrails/BOOTSTRAP.md</code> の完了注記／
+  両PROMPTファイルのStep 10報告フォーマット——ブートストラップが完了する瞬間に必ず
+  1回は目に入るようにした。</li>
+<li>ファイル名はASCII（<code>.guardrails/CUSTOMIZE.md</code>）——日本語ファイル名はzip展開時の文字化けで
+  メタ除外をすり抜ける事故が過去に実測されている（<code>README_SETUP.md</code> 改名の理由と同じ
+  — G1）。</li>
+</ul>
+<h2 id="v220-v219-guardrailsgoalsmd-g">v2.20 での変更点（v2.19 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>セッション内の設計対話から出発した回（正本: .guardrails/GUARDRAILS.md §8.4・§10 Phase 31）。
+「全関数にログを強制すべきか」という問いを、<strong>重要度判定は機械化できない</strong>という結論まで
+詰め、代わりに「客観的に検出できる境界（I/O・外部呼び出し・エラーハンドラ）＋見えない
+サボりを見える形に変える」という設計へ着地させた。</p>
+<ul>
+<li><strong>soft 検査 <code>missing-log-coverage</code></strong>（G9/G7/G4）: 境界の前後5行以内に <code>logOp</code> 呼び出しか
+  <code>NO-LOG: 理由</code> コメントのどちらかを要求する。理由の妥当性は検証しない——存在検査のみ。</li>
+<li>外部調査（2026-07-08）で裏付け: ESLint <code>eslint-comments/require-description</code>・Rust
+  clippy <code>allow_attributes_without_reason</code>・SonarQube S108/S2486・Honeycomb の
+  DBマイグレーションlinterが同型の「存在検査＋可視化」を採用済みと確認——独自発明ではない。</li>
+<li>不採用の記録: 全関数一律強制（ノイズ・空呼びで骨抜き）／テスト実行時の出力量に応じて
+  ログのON/OFFやソース上の位置を自動変更する案（出力量と重要度は無相関・G1決定性と衝突・
+  レビューを経ない自己治癒ランタイム型の変更経路——詳細は §8.4）。</li>
+<li><strong>ログ単一出口の参考実装を python-uv 列に追加</strong>（<code>bindings/catalog.md</code>@6）:
+  「形式は決まっているというが、実際どんな形式かは規定しないのか」という問いに対する
+  回答として、OpenTelemetry Logs Data Model の命名・12-factor app（ログはイベント
+  ストリーム）・構造化ログの実務コンセンサスに揃えた1行1JSONの <code>log_op</code> を実装。実行して
+  出力を確認し、<code>LOG_BOUNDARY_PATTERNS</code>/<code>LOG_CALL_PATTERN</code> も4ケースの違反注入DoDを通した。
+  独自スキーマの発明ではなく、既存標準への収斂であることを明記。サンプルは貼り替え自由な
+  出発点であり、キットの検査はその中身までは見ない（§8.2）。</li>
+<li><strong>是正: GitHub の Download ZIP / Release zip 配置手順が壊れていた</strong>（G9）: <code>guardrails-kit-master.zip</code>
+  のように GitHub のzipは中身が <code>&lt;repo&gt;-&lt;ref&gt;/</code> で1階層ネストされるため、
+  <code>PROMPT_claude_code.md</code>・<code>PROMPT_claude_code_existing.md</code>・<code>README.md</code> が示す
+  「<code>python3 .guardrails-kit-src/scripts/install_kit.py</code> を直接叩く」手順が
+  <code>No such file or directory</code> で失敗することを実際に再現して確認した。加えて
+  <code>install_kit.py</code> 自身の後片付けロジックも <code>kit_root.parent == target</code> の一致判定に
+  依存しており、ネスト配置では該当せず <code>.guardrails-kit-src/</code> が無言で残る（G9違反）ことも
+  発見。①3ファイルの手順を <code>glob</code> による探索へ変更 ②<code>install_kit.py</code> の後片付けを
+  「target 直下の最初の階層コンポーネント」で判定する方式に変更——の2点を修正し、
+  ネスト配置・フラット配置・想定外の名前の3ケースをそれぞれ実行して確認した
+  （ネスト→完全に片付く／フラット→従来どおり片付く／想定外の名前→<code>NOTE:source-kept</code>
+  で明示的に残る、の3通りとも実測どおり）。</li>
+</ul>
+<h2 id="v219-v218-guardrailsgoalsmd-g">v2.19 での変更点（v2.18 からの整備。文書のみ・根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><strong>2026-07-07 調査⑤（実企業の門運用——Rust bors / Uber SubmitQueue / Shopify Shipit /
+GitLab・GitHub の標準機能化）</strong>の回（正本: <code>surveys/SURVEY_COMPANY_GATES.md</code>。調査④と
+重複する Meta / StrongDM は再判定しない）。<strong>機構の追加はゼロ</strong>——それが正直な結論。</p>
+<ul>
+<li>新規発見は1系統のみ: <strong>合流の門（マージキュー）が守るマージスキュー</strong>（個別に緑の
+  PR 同士の意味的衝突）は、<strong>キットのローカル門と PR 単位 CI では原理的に守れない層</strong>。
+  これを設計上の見落としでなく「層の違い」として §10 保留に登録（トリガー = 並行 PR の
+  常態化 or 合流起因の main 赤の実測。発火時は GitHub Merge Queue の設定のみ——Step 9 の
+  required checks がそのまま前提になる）。既設の <code>push</code> 再実行が「即検知・非予防」の
+  部分防御であることも明文化。</li>
+<li>裏書き: Uber の「最悪日 revert 10%・緑率52%」は事後修正文化の実測コストとして記録。</li>
+</ul>
+<h2 id="v218-v217-guardrailsgoalsmd-g">v2.18 での変更点（v2.17 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><strong>2026-07-07 調査④（門主導アーキテクチャ群——Meta RADAR / StrongDM Dark Factory /
+VibeReady / AST ゲート / サンドボックス）</strong>の回（正本: <code>surveys/SURVEY_GATE_ARCHITECTURES.md</code>）。
+大半は現行機構の外部裏書き（機械の門&gt;人間レビューの実測データ等）で、本物の空白2つを採用:</p>
+<ul>
+<li><strong>hard 検査 <code>env-file-tracked</code></strong>（G7/G9）: 実値の入り得る <code>.env</code> 系の追跡を拒否
+  （雛形3種は除外・列 += 可）。gitleaks は内容パターン検査＝低エントロピー実値の素通り
+  経路を存在検査で塞ぐ。</li>
+<li><strong>soft 検査 <code>test-shrink</code>（§3.4 検査8）</strong>（G10/G4）: fix/feat でテストファイル純減を警告。
+  <strong>既存テストの弱体化＝門を欺く最短路</strong>は red-first の守備範囲外だった。警告の常態化は
+  新保留「Clean Room 隔離テスト」のトリガー実測。</li>
+<li><strong>複雑度ゲートは対応表として正本化</strong>（catalog 注記——自作 AST 検査は不採用・linter が
+  上位互換）。<strong>保留1件追加</strong>: Clean Room 隔離テスト（permissions.deny + CI 専用実行の
+  設計スケッチつき）。不採用/裏書き7群の記録は調査④参照（リスクスコア ML・独立モデル
+  判定＝非決定な検証は門になれない・サンドボックス＝実行環境層 等）。</li>
+</ul>
+<h2 id="v217-v216-guardrailsgoalsmd-g">v2.17 での変更点（v2.16 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><strong>2026-07-07 調査③（ゼロレビュー・自律運用系）</strong>の回。ユーザー提供の外部リサーチ
+（自己治癒ランタイム・Dark Factory・Telos 注釈・OpenClaw ワークスペース・Vibe Testing・
+Governed AI 等）を採用ゲートで判定した（正本: <code>surveys/SURVEY_ZERO_REVIEW.md</code>。
+入力コードの欠陥・出典の質も記録）。キットの立場を1行で固定——<strong>ゼロレビューが買える
+のは「機械検査可能な違反ゼロ」まで</strong>。</p>
+<ul>
+<li><strong>soft 検査 <code>context-doc-too-large</code></strong>（G3）: 常時読込の規約文書の行数警告（CLAUDE.md
+  系200行・AGENTS.md 500行、列上書き可）。「注意力の希釈」対策の機械化で、<strong>Skills 化
+  保留のトリガーのセンサー</strong>を兼ねる。</li>
+<li><strong>心得2行</strong>（テンプレ §8）: テストの重心は統合水準へ（モック写しの単体は実装の複製）・
+  LLM 生成テストは境界値と異常系を明示して発注（Testing Trophy——機械化不能な残余）。</li>
+<li><strong>保留1件</strong>: 依存・脆弱性監査 CI ジョブ（本番・顧客データ段階で発火。アドバイザリ DB
+  更新が G1 決定性と衝突する緊張を先に記録——非ブロッキング開始→昇格判定）。</li>
+<li><strong>不採用7群</strong>（詳細と理由は調査③）: 自己治癒ランタイム／Dark Factory 自動マージ／
+  Telos 関数注釈／SOUL・MEMORY・HEARTBEAT／Vibe Testing／トークンバジェット等
+  （中核思想の裏書きとして記録）／SPEC.md・worktree（調査②再確認）。</li>
+</ul>
+<h2 id="v216-v215-guardrailsgoalsmd-g">v2.16 での変更点（v2.15 からの整備。文書のみ・根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>公開（public）に切り替える回。機構の変更なし。</p>
+<ul>
+<li><strong>README.md をポートフォリオ両用に再構成</strong>（G2）: 想定読者を冒頭で明示
+  （①出戻りに焼かれた実務者=道具として ②設計判断を読む技術者=判断ノートとして）。
+  「30秒で分かる設計判断の例」（red-first 証明・虚偽✅監査）と「読みどころの地図」
+  （surveys / Phase 節 / 是正の記録）を新設し、3分で判断の質に到達できる導線にした。
+  正直な注意書き（効果未実測——キット自身の認識論をまだ満たしていない旨）は維持。</li>
+<li><strong>判断の記録</strong>: LICENSE は置かない（ユーザー判断——閲覧中心の公開。再利用許諾が
+  必要になった時点で改めて判定する）。版表記は固定文字列をやめ git タグを正本とした
+  （v2.15 の README が v2.14 と表記したままだった不整合の再発防止）。</li>
+</ul>
+<h2 id="v215-v214-guardrailsgoalsmd-g">v2.15 での変更点（v2.14 からの整備。文書のみ・根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>GitHub（private）での配布へ移行する回。機構の変更なし。</p>
+<ul>
+<li><strong><code>README.md</code> 新設</strong>（G2——初見の読者が「これが何で・どう使い始めるか」に一発到達）:
+  リポジトリの玄関。防壁の層の一覧・正直な注意書き（速くならない/効果未実測/機械検査
+  可能なものだけ/Claude Code 固有3層の境界）・最短の導入経路・読む順番・リポジトリ運用。
+  install_kit ではメタ扱い（README* プレフィックス）＝移植先には配置されない。</li>
+<li><strong>導入手順の記述を §1 に統一（是正）</strong>（G9）: README.md 初稿の「直下に展開」を
+  「<strong>zip を置くだけ→インストーラが fail-closed の衝突判定で配置</strong>」へ書き直した——
+  既存プロジェクトでは直下展開が先住ファイル（.gitignore / CI / pre-commit 設定等）を
+  無断上書きするため。あわせて本書 §1 の「インストール後の姿」ツリーから、移植先に
+  配置されない README.md / surveys/ の2行を除去（v2.14〜15 で誤って追加していた——
+  ツリーの前提は移植先の姿）。</li>
+<li><strong>リポジトリ運用の判断を記録</strong>（G5）: 配布は「版 = git タグ」＋ Release 添付とし、
+  <strong>zip はリポジトリにコミットしない</strong>（木と zip の二重正本はドリフトの温床——
+  binding-drift の配布版）。キット自身のリポジトリでは Actions を無効化する
+  （出荷状態は自己検査が意図的に5件赤 — §3.3——移植先で緑になる設計のため）。</li>
+</ul>
+<h2 id="v214-v213-guardrailsgoalsmd-g">v2.14 での変更点（v2.13 からの整備。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>機構の追加なし——<strong>調査文書の同梱</strong>と、v2.8〜v2.13 で積んだ全機構の<strong>横断整合性監査</strong>の回。</p>
+<ul>
+<li><strong>調査文書の同梱</strong>（G5——判断の出典をキットと一緒に運ぶ）: <code>surveys/</code> を新設し、
+  調査①（<code>SURVEY_MCP_ECOSYSTEM.md</code>——2026-07-07 MCP・エコシステム）と
+  調査②（<code>SURVEY_FAMOUS_KITS.md</code>——同日 著名キット）を同梱。install_kit では
+  <strong>メタ扱い＝移植先には配置しない</strong>（README / PROMPT と同じ分類——判断の出典であって
+  移植先の規約ではない）。</li>
+<li><strong>整合性監査（機械監査スクリプトで横断検査→所見8件を全て修正）</strong>（G4/G5）:
+  ① スクリプトが出す規則IDの全数照合——<code>commit-msg-format</code>・<code>fix-without-test</code> の
+  IDが GUARDRAILS §3.4 に未記載だった（v2.1 以来の欠落）→ 検査1・2の見出しに明記
+  ② <strong>検査番号の連番化</strong>——v2.13 が検査6を欠番にして 7・8 を振っていた →
+  <code>feat-without-test</code>=<strong>検査6</strong>・<code>commit-too-large</code>=<strong>検査7</strong> へ改番（コード・文書・
+  調査②とも同期） ③ §3.3 の scripts 本数 8本→<strong>9本</strong>（v2.12 の check_bootstrap 追加の
+  反映漏れ） ④ missing-required の列挙に台帳 .guardrails/BOOTSTRAP.md を明記 ⑤ §11 Step 2 見出しの
+  旧「スクリプト4本」（v2 は全スクリプト同梱済み）を是正 ⑥ PROMPT の列ID例示 @4→@6・
+  ファイル表に .guardrails/BOOTSTRAP.md 行を追加 ⑦ 不採用記録の「正本は2文書」を v2.10 以降の構成
+  （AGENTS.md / CLAUDE.md）へ ⑧ 歴史記録（各版の変更点セクション内の旧列ID等）は
+  <strong>意図的に残置</strong>——書かれた時点の事実の記録であるため。
+  監査で<strong>問題なし</strong>を機械確認した項目: 全 HARD/SOFT 規則IDの文書照合・REQUIRED_PATHS の
+  実在・PRECOMMIT_REQUIRED↔設定・台帳↔監査器の Step 一致・GOAL_CITATION の G1〜G14 境界・
+  状態表 Phase 19〜26 の完全性・README 版順・テンプレ構造（章見出し14本・import）・
+  出荷状態の自己検査5件・監査器の沈黙。</li>
+</ul>
+<h2 id="v213-v212-guardrailsgoalsmd-g">v2.13 での変更点（v2.12 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><strong>2026-07-07 調査②（著名な同種キット）</strong>の回。Superpowers（obra）・GitHub Spec Kit・
+Kiro（AWS）・BMAD-METHOD・OpenSpec・GSD・Ralph Loop・Beads 等を調査した
+（成果物: <code>surveys/SURVEY_FAMOUS_KITS.md</code>——v2.14 でキットに同梱）。最大の発見は<strong>本キットの路線の
+外部裏書き</strong>——著名キットはほぼ全てプロンプト層の規律であり、Fowler の実測は
+「チェックリストは AI が解釈するため保証が無い」、EPAM の事例は「明文の constitution
+規則ですら破られる」ことを示した。機械化できる知見は2つだけ採用:</p>
+<ul>
+<li><strong>検査6 <code>feat-without-test</code>（soft）</strong>（G10/G4）: feat: がコードに触れるのにテスト変更が
+  無ければ警告（Superpowers の TDD 鉄則の門化。fix 側=検査2 hard の feat 版）。
+  soft で観測から始め、昇格トリガーを Phase 25 に登録（v2.6 検査5と同じ導入経路）。</li>
+<li><strong>検査7 <code>commit-too-large</code>（soft）</strong>（G11/G4）: 純変更 400 行超（生成物・lockfile 除外・
+  列上書き可）で警告（Superpowers「2〜5分粒度」等の収斂の門化——実行規律2の一般開発版）。</li>
+<li>心得側3行を AGENTS.md テンプレへ（plan の粒度・feat のテスト同梱・小さなコミット）。</li>
+</ul>
+<h3 id="v213-2">v2.13 で検討し<strong>不採用/対象外</strong>にしたもの（調査②の判定——再提案ループ防止）</h3>
+<table>
+<thead>
+<tr>
+<th>候補（出典）</th>
+<th>判定と一行理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>役割エージェント群（BMAD の 12+ ペルソナ）</td>
+<td>不採用再確認——§5-5 前例（正本の分裂・可動部増）。ハンドオフのファイル受け渡しが崩れる実測報告も調査②に</td>
+</tr>
+<tr>
+<td>プロセスファイル一式（Spec Kit の specify/plan/tasks・Kiro の requirements/design/tasks）</td>
+<td>不採用——チェックリストは AI 解釈で保証なし（Fowler）。本キットは同じ目的を門で達成済み（plan は検査5、DoD は BOOTSTRAP 監査、constitution は .guardrails/GOALS.md＋検査3）</td>
+</tr>
+<tr>
+<td>constitution 概念そのもの</td>
+<td>採用済みと判定——.guardrails/GOALS.md（G引用の機械検査つき）が同等以上。名称だけの輸入はしない</td>
+</tr>
+<tr>
+<td>GSD・Ralph Loop（メタプロンプト/ループ実行）</td>
+<td>対象外——実行時のオーケストレーションはキットの層（リポジトリ内の門）の外。プロンプト集の常駐は v2.11 と同根で不採用</td>
+</tr>
+<tr>
+<td>Beads・Memory Bank 系の台帳/メモリ</td>
+<td>不採用再確認——§13 中央メモ禁止。タスク台帳の正当な形は plan.md と .guardrails/BOOTSTRAP.md（検証可能な範囲のみ）</td>
+</tr>
+<tr>
+<td>git worktree 並列実行（Spec Kitty / Conductor 等）</td>
+<td>対象外——個人のワークフロー層。キットの門はブランチ構成に依存しない</td>
+</tr>
+<tr>
+<td>Kiro の EARS 記法強制</td>
+<td>不採用——受け入れ条件の形式強制は偽陽性&gt;価値（§7.4 の範囲外）。「テスト可能な形で書く」は §8 の心得で足りる</td>
+</tr>
+<tr>
+<td>Superpowers の skills 層への追随</td>
+<td>保留済み（v2.11 の Skills 化トリガーに包含——常駐問題の実測＋相互運用標準の成熟待ち）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v212-v211-guardrailsgoalsmd-g">v2.12 での変更点（v2.11 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>「LLM がプロンプト1つでキットを展開できるか」という懸念への回答の回。
+プロンプト分割は不採用（心得の再配置——検証力を足さずに人間の介入だけ増える。正しい
+分割単位は既に 1 Step = 1 コミットで存在する）とし、<strong>✅ の自己申告を門で検証する機構</strong>
+＝実行規律1〜4（順序・1Step=1コミット・完了=実行結果・虚偽✅禁止）の機械化を実装した。</p>
+<ul>
+<li><strong>ブートストラップ監査 <code>check-bootstrap</code>（hard・§3.5 新設）</strong>（G7/G4/G2）: 進捗の正本を
+  <strong><code>.guardrails/BOOTSTRAP.md</code>（台帳）</strong> に一本化し（状態 🚧/✅/—＋固有名詞リストC）、
+  pre-commit フックが<strong>台帳に触れたコミット＝✅ 化の瞬間</strong>に発火して4種を機械検査する
+  （CI の --all-files では常時再監査——guard-corpus と同じ二重の網）:
+  <code>bootstrap-order</code>（✅ は番号順のみ）・<code>bootstrap-multi-flip</code>（✅ 化は1コミット1Step）・
+  <strong><code>bootstrap-false-done</code>（✅ の Step ごとに検証可能なアサーションをその場で再実行</strong>——
+  例: Step 1 = 章見出し14本＋★/TODO/固有名詞Cの残置 grep、Step 2 = 索引 <code>--check</code> 再実行、
+  Step 4 = guard コーパス全再生、Step 5 = 形式違反メッセージの注入やり直し、
+  Step 10 = コード全ファイルの TODO grep<strong>）</strong>・<code>bootstrap-demote</code>（✅→— 禁止。
+  ✅→🚧 の差し戻しが正規経路）。<strong>嘘の ✅ と空実装は物理的にコミットできなくなり、
+  人間は台帳を見るだけで進捗を監査できる</strong>。出荷状態（全 🚧）では沈黙——進捗を強要する
+  門ではなく、「進んだという主張」だけを検証する。</li>
+<li>付随（G5）: §11 のチェックリストから状態列を廃し .guardrails/BOOTSTRAP.md へ移行（進捗正本の
+  一本化）、実行規律1〜4に機械化注記、台帳と監査器を missing-required へ、
+  install_kit の必須フック検証に check-bootstrap を追加、PROMPT 2本に台帳運用を追記。</li>
+</ul>
+<h2 id="v211-v210-guardrailsgoalsmd-g">v2.11 での変更点（v2.10 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p><strong>2026-07-07 に実施した MCP・エコシステム・Plugin 連携調査</strong>（LLM = Claude Code 前提）の
+判定をキットへ固定した回。調査の結論は「即時採用すべき新規はゼロ——現構成
+（Playwright MCP 1本＋CLI 群＋薄い常駐）が推奨形に既に一致」であり、成果物は機構の追加
+ではなく<strong>判定の門化と記録</strong>（改善の必要がない部分は改善しない）。</p>
+<ul>
+<li><strong>MCP 採用許可リスト <code>mcp-not-allowed</code>（hard）</strong>（G3/G5/G7）: プロジェクト正本
+  （追跡された <code>.mcp.json</code>）に置ける MCP を <code>repo_scan.py</code> の <code>MCP_ALLOWED_SERVERS</code>
+  （中立既定値 <strong>playwright のみ</strong>＝2026-07-07 調査の判定）の許可リスト制にする。
+  「便利そうだから」の MCP 常駐（ツール定義がコンテキストを食う——実測例: GitHub MCP
+  フルで 42〜55k トークン）を、判定の記録なしには増やせなくした。解釈不能な JSON は
+  <code>SOFT:mcp-unparseable</code> で素通し・タスク単位のローカル追加（<code>claude mcp add</code>）は
+  対象外＝門は「常駐の既成事実化」だけを塞ぐ。</li>
+<li><strong>採用規律の正本化</strong>（G5）: 採用ゲート3条（①重複排除——CLI・ネイティブ・既存機構が
+  優先、逆転は実測のみ ②常駐予算——スポット用途はタスク単位 add/remove へ格下げ
+  ③契約整合——書込ツール・メモリ生成・注入面）を catalog の
+  「<strong>MCP・エコシステム採用規律（2026-07-07 調査）</strong>」注記に登録。deprecated-api の
+  出典規律と同格の、許可リストを増やす時の判定手順の正本。</li>
+<li><strong>保留4件の登録</strong>（§10 保留節・トリガー付き）: Chrome DevTools MCP（性能調査時のみ・
+  タスク単位で常駐させない）／Context7（deprecated-api で同一ライブラリの再発を実測した
+  時）／Serena（大規模<strong>既存</strong>リポジトリで参照追跡が溢れる実測が出た時のみ・memories
+  無効化＋read-only 条件付き）／Skills 化（AGENTS.md 常駐の問題化＋相互運用標準の成熟）。</li>
+</ul>
+<h3 id="v211-2026-07-07">v2.11 で検討し<strong>不採用</strong>にしたもの（2026-07-07 調査の判定表——再提案ループ防止の転記先）</h3>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>不採用の一行理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Serena MCP（新規リポジトリの常駐）</td>
+<td><code>.serena/memories/</code> が §13「中央メモ禁止」と正面衝突（Memory Bank 不採用と同根）。索引=STRUCTURE.md＋500行/7ファイル上限で役割充足。トークン削減効果はタスクレベルで逆転する実測もあり「明らかに性能が大きい」に該当せず。大規模既存限定の再評価は保留（§10）</td>
+</tr>
+<tr>
+<td>GitHub MCP</td>
+<td><code>gh</code> CLI が完全代替（実測 約35倍のトークン差・定義常駐 42〜55k）。外部内容読込経由の注入実証（toxic agent flow 2025-05）もある領域</td>
+</tr>
+<tr>
+<td>Supabase / Postgres 系 MCP</td>
+<td>観察レールは <code>dev.py db</code>（読み取り専用・ローカル限定）と CLI で充足。書込可能ツールは §2/§3 の門の外の変更経路（G7）</td>
+</tr>
+<tr>
+<td>filesystem / git / fetch 等の基本系 MCP</td>
+<td>Claude Code ネイティブツールと完全重複——定義分だけ損</td>
+</tr>
+<tr>
+<td>sequential-thinking MCP</td>
+<td>拡張思考（ネイティブ）と重複</td>
+</tr>
+<tr>
+<td>memory / knowledge-graph 系 MCP</td>
+<td>§13 中央メモ禁止・Memory Bank 不採用（v2.4）と同根。auto memory も既存</td>
+</tr>
+<tr>
+<td>プロンプト集型フレームワーク（SuperClaude 等）</td>
+<td>大量の「心得」の常駐はキットの「機械化できる部分はすべて門」と正反対で、常駐トークンも大</td>
+</tr>
+<tr>
+<td>Plugins / マーケットプレイスによるキット配布</td>
+<td>プラグインはユーザー環境層＝規約が統治するコードと同じコミットに固定されない（G5/G1——Agent Rules MCP 不採用と同根）。配布の正本は install_kit.py のまま</td>
+</tr>
+<tr>
+<td>SaaS 系 MCP（Sentry・CircleCI 等）・個人ツール（ccusage・mgrep 等）</td>
+<td>対象外——製品都合・個人利用自由（Repomix 前例）。入れるならタスク単位で・キット正本に入れない</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v210-v29-guardrailsgoalsmd-g">v2.10 での変更点（v2.9 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>保留項目「AGENTS.md 可搬列」のトリガー（他エージェント併用の発生）がユーザー宣言で成立し、
+登録済みの設計スケッチどおり発動した回（Phase 22）。</p>
+<ul>
+<li><strong>規約の正本を全エージェント共通の <code>AGENTS.md</code> へ二分</strong>（G13/G5/G7）: 旧ルート
+  CLAUDE.md の全章（§0〜§13）を <strong><code>AGENTS.md.template</code> へ移設</strong>（章番号不変）。
+  Codex / Cline / Cursor / Windsurf はルート AGENTS.md をネイティブに直読みし、
+  Claude Code は薄くなった <code>CLAUDE.md</code> 冒頭の <strong><code>@AGENTS.md</code> インポート</strong>（公式
+  ドキュメント記載の到達経路）で同じ本文を読む。<strong>同期スクリプトは作らない</strong>——
+  同一内容の正本を2つ置いて一致を追いかける構図は G5 違反（binding-drift の規約版）。
+  分割なら同期対象が存在せず、ドリフトは構造的に発生しない。インポート行の存在は
+  新設の hard 検査 <strong><code>agents-import-missing</code></strong>（<code>REQUIRED_CONTENT_RULES</code> の既定1件目）が
+  機械強制し、<code>AGENTS.md</code> 自体も <code>missing-required</code> の対象に追加。
+  CLAUDE.md 側に残るのは Claude Code 固有のフック層（§1/§2/§2b/§2c）の説明のみで、
+  §3〜§5 の門（pre-commit / commit-msg / pre-push / CI）は git フックと CI なので
+  <strong>元より全エージェント共通</strong>——可搬性の空白はフック層だけ、を §6 に明文化。
+  symlink 方式は Windows でプレーンテキスト化する既知の罠があり不採用（§7.2 の前提）。
+  フォルダ別 CLAUDE.md は据え置き（探索仕様がツール間で割れる領域——運用は
+  AGENTS.md §12 手順3「触るフォルダの CLAUDE.md を読む」が全エージェントに効く）。</li>
+<li>文書の更新（G5/G13）: §6 を二分構成に再構成、§3.3 に <code>agents-import-missing</code>＋
+  出荷状態の想定出力を5件へ、§11 Step 1 を2テンプレ同時完成へ、§0 一次対応表に
+  他エージェント行、Phase 22 を新設（実装時の事実確認と同期スクリプト不採用の判断を
+  記録）。本書・.guardrails/GOALS.md・catalog・スクリプトの章参照を <code>AGENTS.md §N</code> へ機械改名
+  （移植元原本への言及と変更点の歴史記録は除外）。catalog は ts-react-web@6（注釈の
+  改名のみ）。v2.7 で漏れていた §3.3 のスクリプト本数（7本→8本）も是正。</li>
+</ul>
+<h2 id="v29-v28-guardrailsgoalsmd-g">v2.9 での変更点（v2.8 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<p>更新計画の残り2つの決定点をユーザー判断で確定し、両方とも<strong>強い側</strong>へ倒した回。</p>
+<ul>
+<li><strong>Stop ゲート条件B＝決定点②の強化案を確定</strong>（G7/G4/G2）: ターン終了ゲート（§2b）の
+  差し戻し条件に「ツリーはクリーンだが <code>dev.py check</code> が赤」を追加。これまでは
+  「クリーンにさえすれば赤い検査を残して終われる」隙間があった（条件A=未コミット作業
+  のみ）。誤差し戻しは3つの絞りで抑える: <code>HARD:</code> を含む exit 1 だけが差し戻す
+  （check の内部エラー exit 2・素の非0は素通し）／uv・dev.py 不在は<strong>表示1行で
+  条件Aのみへ縮退</strong>（fail-open の向きは従来どおり）／差し戻し上限3回のカウンタは
+  条件A/Bで共有。差し戻し文面には違反の先頭5行（規則ID入り）を同梱——そのまま
+  §3.3 へ直行できる。条件Bはクリーン時のみ走るため毎ターンの追加コストは2秒予算内。</li>
+<li><strong>red-first の required 化＋<code>RED-FIRST-EXEMPT</code> 乱用監視＝決定点③を確定</strong>（G10/G7）:
+  CI の red-first ジョブから <code>--soft</code> を外した——違反（親コミットでも緑の fix）は
+  <strong>exit 1 でジョブが赤</strong>。計画の運用条件「最初から required にするなら EXEMPT の
+  乱用監視をレビュー規約に足すこと」を二層で実装した: <strong>機械部分</strong>＝理由の無い
+  <code>RED-FIRST-EXEMPT</code> は免除不成立（1行表示して通常判定を続行）、<strong>人間部分</strong>＝
+  レビュー規約をルート CLAUDE.md テンプレ §8 に追加（理由の具体性・CI 上の
+  再現不能性・頻度を点検）。required の完成はブランチ保護の required checks への
+  登録まで（リポジトリ設定——§11 Step 9 ④）。表示のみへ戻すロールバックは CI の
+  呼び出しに <code>--soft</code> を足すだけ。</li>
+<li>文書の更新（G5/G13）: §0 全体像・一次対応表（Stop 行を新設・red-first 行を更新）、
+  §2b を条件A/B/免除の3部構成に改稿（決定点②の確定を記録）、§5 の導入強度を
+  required へ、§10 状態表に Phase 20・21・Phase 18 節に確定の追記・保留（変異テスト）
+  のトリガー文言更新、§11 Step 4 ⑥／Step 9 ④ に条件B・required の注入を追加。
+  カタログ・.guardrails/GOALS.md の変更なし（両機構とも既存Gの強化——列値も判定列も不変）。</li>
+</ul>
+<h2 id="v28-v27-guardrailsgoalsmd-g">v2.8 での変更点（v2.7 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>第4レンズ「意図の保存」＝G14「意図の複利」の新設と <code>feat-without-plan</code> の hard 昇格</strong>
+  （G14/G7/G5）: v2.6 から soft（表示のみ）で運用してきた検査5を <strong>exit 1 の hard</strong> へ
+  昇格し、根拠を .guardrails/GOALS.md の<strong>レンズ4</strong>として憲法化した——<strong>決定点①を案Aで確定</strong>
+  （ユーザー判断・§10 Phase 19）。レイヤー直下（列充填の <code>PLAN_LAYER_ROOTS</code>——空なら
+  不発は据え置き）に新規ディレクトリを作る <code>feat:</code> は、設計根拠（<code>plan.md</code> /
+  <code>docs/plans/</code>——1行でよい）の差分を同コミットに含めない限り落ちる。
+  <strong>逃げ道の意味論は fix⇔テスト（検査2）と同一</strong>: 根拠を書けない構造変更は feat を
+  名乗らない（refactor / chore）。fix⇔テスト（G10＝回帰の複利）と feat⇔plan
+  （G14＝意図の複利）が対として完成し、「何を直したか」と「なぜ作ったか」の両方が
+  git 履歴に機械強制で残る。</li>
+<li><strong>同時改修の3点セット</strong>（旧計画が「§1-7 で実測済みの罠」と警告していた漏れ——同一の
+  変更で実施）: ① <code>check_commit_msg.py</code> の <code>GOAL_CITATION</code> 正規表現を
+  <code>G(1[0-4]|[1-9])</code> へ（G14 引用が検査3で偽陽性にならない） ② .guardrails/GOALS.md ヘッダ
+  「G1〜G13」「13条」→「G1〜G14」「14条」＋レンズ4新設・G5 行の分担整理（同梱強制は
+  G14 へ移管、G5 は「正本が単一」に純化） ③ README・.guardrails/GUARDRAILS.md（§0 一次対応表・
+  §3.4 検査5・§6 表・§10 状態表 Phase 17/19・§11 Step 0 表A/Step 5 ⑥）・catalog 注記・
+  CLAUDE.md テンプレ §4 の soft 表記を hard へ。</li>
+<li>移植先への影響: 既存リポジトリでは、これまで警告止まりだった構造追加コミットが
+  落ちるようになる。対応は「1行の根拠を書く」か「feat を名乗らない」の二択のみ
+  （§0 一次対応表）。列未充填（<code>PLAN_LAYER_ROOTS</code> 空）の場合は従来どおり不発。</li>
+</ul>
+<h2 id="v27-v26-guardrailsgoalsmd-g">v2.7 での変更点（v2.6 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>red-first 証明 CI（<code>red-first</code> ジョブ・PR のみ）</strong>（G10/G7）: 検査2（fix⇔テスト対）は
+  「テスト同梱」までしか強制していなかった——そのテストが<strong>バグを再現していた</strong>こと
+  （＝親コミットで赤だった）を <code>scripts/check_red_first.py</code> が機械証明する。PR 範囲の
+  <code>fix:</code> コミット毎に、そのコミットで<strong>追加</strong>されたテストファイルを親コミットの一時
+  worktree（リポジトリ直下 <code>.red-first-*/</code>——node/npx の上方解決で主チェックアウトの
+  <code>node_modules</code> が見える）へコピーし、採用列の「単一テストファイル実行」で1ファイル
+  ずつ実行——<strong>少なくとも1つが赤</strong>なら証明成立、全部緑なら <code>red-first-green</code> を
+  1コミット1行で報告する。「直した証明」が自己申告から実行結果に変わる（G10 の完成形）。
+  CI 上で赤にできない修正は本文の <code>RED-FIRST-EXEMPT: 理由</code> 行で免除（免除・対象外は
+  すべて1行で見える——静かなスキップの禁止）。「非0=赤」は近似であり仕様（§7.4——親で
+  実行エラーになるテストも「親が fix を欠く」の現れとして寛大側に倒す）。
+  <strong>出荷状態は表示のみ</strong>（CI が <code>--soft</code> で呼ぶ——違反は SOFT: 列挙・exit 0。ただし内部
+  エラー exit 2 は素通しにしない）。<strong>決定点③</strong>: 数値が安定したら CI の呼び出しから
+  <code>--soft</code> を外して required 化（カバレッジの「表示のみ→ラチェット」前例）。
+  BINDING は <code>repo_scan.py</code> の <code>SINGLE_TEST_COMMAND</code> / <code>SINGLE_TEST_CWD</code>（未充填なら
+  不発1行＝言語なし出荷と両立）。多層構成（例: <code>app/</code> 直下で実行する Flutter）は cwd
+  スロットで吸収し、単独実行が構造的に不能な rust は「該当なし＋代替」を判断ごと記録。</li>
+<li>文書の更新（G5/G13）: §0 全体像・一次対応表に1行、§3.4 検査2・§9.3 に相互参照、
+  <strong>§5 に red-first ジョブの契約</strong>、§10 Phase 18 を ✅ 化（実装時確定3点——worktree の
+  位置・cwd スロット・<code>--soft</code> フラグ——を記録）、§11 Step 0 表A に1行・Step 9 完了条件に
+  ④。catalog は表Aに1行＋4列とも版上げ（ts-react-web@5・python-uv@5・dart-flutter@4・
+  rust@4。rust は「該当なし＋代替」・dart は cwd スロット、の判断ごと記録）。
+  .guardrails/GOALS.md G10 行に判定・機構を追記（✅→✅/（列））。<code>.gitignore</code> キット区画に
+  <code>.red-first-*/</code> を追加（worktree 残骸で porcelain が汚れない——§2b の session/ と同じ理由）。</li>
+</ul>
+<h2 id="v26-v25-guardrailsgoalsmd-g">v2.6 での変更点（v2.5 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>世代交代 API 検査 <code>deprecated-api</code></strong>（G4/G13/G7）: LLM が訓練カットオフの都合で
+  書きがちな旧作法（例: python の <code>datetime.utcnow(</code>）を、プロンプト規則（心得）でなく
+  <code>repo_scan.py</code> の列パターン <code>DEPRECATED_PATTERNS</code>（門）として封鎖する hard 検査。
+  <strong>テスト内限定でなく全コード走査</strong>。列値の出典規律（①ベンダー公式 AI プロンプト
+  ②公式非推奨告知のみ初期値・近似不能な構文世代は載せない）をカタログに明文化。
+  違反注入の実測で<strong>自己偽陽性</strong>（paste-block のラベルが自分のパターンに一致）を発見し、
+  パターン定義の正本 <code>scripts/repo_scan.py</code> 自身のみ除外に確定（定義は引用であって使用
+  ではない——<code>LOG_EXIT_PREFIXES</code> と同じ境界。.guardrails/GUARDRAILS.md §3.3）。</li>
+<li><strong>所有権ガード（§2c 新設）</strong>（G7/G6/G9）: セッション開始時点で既に未コミット変更が
+  あったファイル（＝<strong>人間の WIP</strong>）への AI の Edit/Write を exit 2 でブロックする。
+  SessionStart フック <code>session_baseline.sh</code> が開始時点の dirty パス集合を保存し、
+  PreToolUse(Edit|Write|MultiEdit) フック <code>guard_human_wip.sh</code> が「baseline に含まれ、
+  かつ<strong>現在も</strong>未コミット」の両立時だけ止める——人間が commit / stash すれば<strong>自動解除</strong>
+  （特別な解除経路は無い）。v2.5 の作業消失ガード（WIP を消せない）と対になり、
+  「未コミット作業の保全」が消失・混入の両面から完成。契約は §2b の仲間の
+  <strong>fail-open</strong>（baseline 不在・git 不在は警告1行で素通し——壊れたフックが全編集を
+  止めない。§2 の fail-closed と逆向き）。既知の限界: 同一セッション内の人間との
+  並行編集は守れない（baseline は開始時点のスナップショット）。</li>
+<li><strong>feat⇔plan 対 <code>feat-without-plan</code>（soft・表示のみ）</strong>（G5）: レイヤー直下
+  （列充填の <code>PLAN_LAYER_ROOTS</code>——空なら不発）に HEAD に無い新規ディレクトリを作る
+  <code>feat:</code> に、設計根拠文書（<code>plan.md</code> / <code>docs/plans/</code>）の差分が無ければ警告1行。
+  <strong>コミットは通る</strong>。fix⇔テスト（G10＝回帰の複利）と対をなす「意図の複利」の入口。
+  <strong>決定点①は未決</strong>——hard 昇格（G14「意図の保存」新設）は soft 運用でノイズ率を
+  実測してからのユーザー判断（機械の実績が先、憲法改正は後——.guardrails/GUARDRAILS.md §10）。</li>
+<li><strong>コーパス再生の並列度をコア数から自動導出</strong>（G11）: <code>check_guard_corpus.py</code> の
+  固定値 <code>max_workers=16</code> を <code>os.cpu_count()</code> 由来（下限8・目安2×コア・上限32）に変更。
+  標準ライブラリで Windows 含め動くため、<strong>ユーザー入力も調査スクリプトも不要</strong>
+  （8コア機では従来と同じ16——挙動の実質変更なし・多コア機で速くなる）。</li>
+<li>文書の更新（G5/G13）: §0 全体像・一次対応表に3機構の行、<strong>§2c 新設</strong>、§3.3 に
+  <code>deprecated-api</code>、§3.4 に検査5、§10 の Phase 15〜17 を ✅ 化（実装時確定3点を記録）・
+  保留に「所有権ガードのコーパス再生」をトリガー付きで登録、§11 Step 0 表A に2行・
+  Step 4/5 の DoD 追記。catalog は表Aに2行＋出典規律の注記＋4列とも版上げ
+  （ts-react-web@4・python-uv@4・dart-flutter@3・rust@3。ts 列の <code>getSession(</code> は
+  「ブラウザ SPA では対象外」の判断ごと記録・dart/rust は「該当なし」の判断ごと記録）。
+  .guardrails/GOALS.md の G5/G7 行に新機構を追記。</li>
+</ul>
+<h2 id="v25-v24-guardrailsgoalsmd-g">v2.5 での変更点（v2.4 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>編集直後リント（PostToolUse 第2段）</strong>（G4/G11）: 整形（第1段・自動修正系）の直後に
+  編集された1ファイルへ判定系 lint を当てる <code>.claude/hooks/post_edit_lint.sh</code> を同梱。
+  違反は exit 2 で stderr が Claude に渡り<strong>その場で修正</strong>——lint の初出が push 段から
+  編集直後へ2段前倒しになり「push で落ちて再試行」の1周が消える。公式仕様では同一
+  matcher の複数フックは並列・順序不定のため、<code>settings.json</code> は整形→lint の<strong>直列
+  1コマンド</strong>として配線済み（順序が実行環境の仕様に依存しない — .guardrails/GUARDRAILS.md §1）。
+  性能予算「編集1回あたり合計3秒以内」を §7.7 に新設（実測: ruff 単一ファイル約60ms）。
+  ツール未導入は1行表示して素通し（静かな不発を防ぎ、フローは止めない）。</li>
+<li><strong>依存追加の明示化 <code>undeclared-dependency</code>（commit-msg 検査4）</strong>（G7/G6/G9）:
+  依存マニフェスト（package.json / pyproject.toml / Cargo.toml / pubspec.yaml——
+  basename 一致でモノレポのネストも対象）に <strong>HEAD 比で追加された名前</strong>があるのに
+  本文に現れないコミットを exit 1 で止める（<code>依存追加: &lt;名前&gt; — 理由1行</code> を書けば通る）。
+  <strong>依存は増えてよいが、黙って増えてはならない</strong>——fix⇔テストと同じ「意味論で塞ぐ」型。
+  lockfile・版更新・削除・初回コミット・新規マニフェストは対象外（境界は §3.4 に明記）。</li>
+<li><strong>作業消失ガード</strong>（G7/G9/G10）: 迂回防止と同じ主防壁 <code>guard_git_bypass.sh</code> 内の節として、
+  <strong>非可逆な作業消失だけ</strong>を exit 2 で塞ぐ——① <code>.git</code> を含む <code>rm -rf</code> は常時ブロック
+  ② <code>git reset --hard</code>・<code>git clean -f</code>・広域 <code>checkout .</code>/<code>restore .</code> は<strong>未コミット変更が
+  ある時だけ</strong>ブロック（dirty 条件が誤検知をほぼ消す。クリーンなら素通し・<code>stash</code> が正規の
+  退避経路）。回帰再生のためコーパスに<strong>前提列</strong>（<code>期待&lt;TAB&gt;dirty|clean&lt;TAB&gt;コマンド</code>）を
+  新設——チェッカが一時リポジトリのフィクスチャで dirty/clean を機械再生する（§2）。
+  コーパスは 40行→<strong>74行</strong>。</li>
+<li>文書の更新（G5/G13）: §0 全体像・一次対応表に3機構の行、§1 を直列2段の契約に改稿、
+  §3.4 に検査4、§7.7 に3秒/編集予算、§10 の Phase 12〜14 を ✅ 化（実装時確定2点を記録・
+  Phase 14 の旧 DoD ⑤ は Phase 16 へ繰り越し）、§11 Step 0 表A に2行・Step 4/5 の DoD 追記。
+  catalog は表Aに2行＋4列とも版上げ（ts-react-web@3・python-uv@3・dart-flutter@2・rust@2。
+  lint 不適合言語は「該当なし（push 段で回収）」の判断ごと記録）。</li>
+</ul>
+<h3 id="v25">v2.5 で検討し<strong>不採用</strong>にしたもの</h3>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>不採用の一行理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>汎用の危険コマンド一覧（rm 全般・dd 等）</td>
+<td>誤検知の密集地帯。非可逆な作業消失2種に限定する方が信号が濃い（§2）</td>
+</tr>
+<tr>
+<td>依存検査での lockfile 監視</td>
+<td>推移的更新まで宣言を強いると儀式化する——直接依存の名前だけが意図の単位（§3.4）</td>
+</tr>
+<tr>
+<td>tomllib による TOML 解析</td>
+<td>Python 下限が 3.11 に上がる（§7.1 違反）。行指向の自前近似で足りる——近似は仕様（§7.4）</td>
+</tr>
+<tr>
+<td>lint 第2段の2エントリ登録</td>
+<td>公式仕様で並列・順序不定——整形→lint の順序が保証できないため直列1コマンドに（§1）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v24-v23-guardrailsgoalsmd-g">v2.4 での変更点（v2.3 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>guard 迂回コーパス</strong>（G10/G7/G11）: 主防壁 <code>guard_git_bypass.sh</code> の回帰テストを同梱。
+  <code>tests/guard_corpus.tsv</code>（<code>期待&lt;TAB&gt;コマンド</code>、DENY 25行＋ALLOW 15行）を
+  <code>scripts/check_guard_corpus.py</code> が実フックへ再生して照合する。門番を改修した時に
+  過去に塞いだ迂回が静かに開き直る事故を、<code>HARD:guard-corpus-mismatch</code> の機械停止に
+  変える。pre-commit では門番3点に触れたコミットだけで走り、CI では常時走る。</li>
+<li><strong>probe 動詞（事前照会）</strong>（G4/G12/G2）: <code>uv run scripts/dev.py probe "&lt;cmd&gt;"</code> が
+  迂回防止の判定を実行前に返す（<code>ALLOW</code> / <code>DENY guard: 理由</code>）。コーパス再生と同一経路で
+  guard を呼ぶため、照会結果＝実際のブロック挙動。<code>dev.py</code> は9動詞→<strong>10動詞</strong>。</li>
+<li><strong>ターン終了ゲート（Stop フック）</strong>（G7/G2）: 実行規律7「途中でターンを終えない」を
+  機械化。未コミットの作業があり、かつ <code>BLOCKED:</code> 報告も無いターン終了を exit 2 で
+  差し戻す（<code>.claude/hooks/stop_incomplete_guard.sh</code>）。無限ループはセッション毎
+  カウンタ（最大3回）と Claude Code 本体の上限で二重に保護。<strong>§2 の fail-closed とは
+  逆に、このフックの内部エラーは fail-open（素通し）</strong>——壊れた門がセッションを
+  終了不能にしないため。契約は .guardrails/GUARDRAILS.md <strong>§2b（新設）</strong>。</li>
+<li><strong>走査の頑健化（DoD 違反注入で発見した実バグの修正）</strong>（G7/G11）: 追跡済みだが
+  ディスクに無いファイル（削除コミットの直前＝pre-commit が走る状態）があると
+  <code>check</code> が <code>FileNotFoundError</code> の内部エラー exit 2 で落ち、本来の
+  <code>HARD:missing-required</code> 報告が出なかった。<code>repo_scan.list_tracked_files</code> が
+  ディスク実在でフィルタするよう修正——防壁消失は規則ID付きの1行で止まる（Fail Loudly）。</li>
+<li>文書の追記（G5/G13）: §0 全体像表に「ターン終了」行と Fail Loudly の対応注記、
+  §10 状態表に Phase 9〜18（v2.4 の3機構 ✅＋v2.5〜v2.7 の予定 🚧）と保留3件
+  （トリガー付き）を登録。<code>permissions.deny</code> の不動作が外部で報告されている件と
+  「CLAUDE.md は影響であって強制ではない」件を §2 に注記（フック側に門を置く本キット
+  構造の外部裏書き）。</li>
+</ul>
+<h3 id="v24">v2.4 で検討し<strong>不採用</strong>にしたもの（再提案ループ防止の記録。詳細理由の正本は本節）</h3>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>不採用の一行理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Memory Bank（複数 md の記憶術）</td>
+<td>手書き文書群は腐る（G9）。本キットは生成物＋門で同じ役割を既に果たす</td>
+</tr>
+<tr>
+<td>Repomix 成果物の同梱</td>
+<td><code>STRUCTURE.md</code>（生成・鮮度検査つき）と重複。腐る成果物を増やさない（G9/G3）</td>
+</tr>
+<tr>
+<td>反迎合プロンプト規則の追加</td>
+<td>心得は門にならない（G7）。迎合の実害は §3.4/§10 実行規律が既に機械側で塞ぐ</td>
+</tr>
+<tr>
+<td>計画実行モード規約（Plan Mode 常用の明文化）</td>
+<td>ツール固有 UI への依存（G13）。規律7＋§2b で挙動側を固定した</td>
+</tr>
+<tr>
+<td>特化型エージェント表（reviewer/architect 等）</td>
+<td>役割分担は門を増やさない。検査は既に非対話の機械（G7）</td>
+</tr>
+<tr>
+<td>クラウド API 併用（実 LLM でのコーパス評価）</td>
+<td>決定性が壊れる（G1）。コーパスは実フック再生で足りる</td>
+</tr>
+<tr>
+<td>Before/After スナップショット認知ログ</td>
+<td>書く量が増えるだけで判定機構が無い（G11）。git 履歴＋STRUCTURE で代替済み</td>
+</tr>
+<tr>
+<td>Agent Rules MCP（規則配信サーバ）</td>
+<td>規則の正本が外部化しドリフトする（G5/G13）。正本はリポジトリ内の規約文書（v2.10 以降は AGENTS.md / CLAUDE.md — §6）</td>
+</tr>
+<tr>
+<td>Repomix MCP（都度パック生成）</td>
+<td>ランタイム依存を増やす（G11）。観察レール §12.3 と重複</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v23-v22-guardrailsgoalsmd-g">v2.3 での変更点（v2.2 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>配置の機械化 <code>scripts/install_kit.py</code></strong>（G2/G9/G7）: 「ルートへ手でコピー」は既存
+  ファイルとの衝突＝上書き事故の温床だった。zip / 展開フォルダをルートに置けば、配置・
+  既存との衝突判定（決して黙って上書きしない）・<code>.gitignore</code> のマーカー区画追記・
+  キット系統ファイルの安全な版上げ（git 履歴を安全網に <code>UPGRADED</code>）・検証・<strong>zip の
+  自動後片付け</strong>までを1コマンドで行う。判定は決定的・出力は1行1ファイル・再実行は冪等。</li>
+<li><strong>CI ワークフローを <code>guardrails-ci.yml</code> へ改名</strong>（G13）: 既存リポジトリで最も衝突しやすい
+  <code>ci.yml</code> を、キット名前空間にして衝突そのものを消した（GitHub Actions は複数ワークフローの
+  共存が正規の形）。旧 <code>ci.yml</code> の痕跡はインストーラが <code>NOTE:legacy</code> で知らせる。</li>
+<li><strong>本書を <code>README_SETUP.md</code> へ改名</strong>（G1）: 日本語ファイル名は zip 展開系（Windows の
+  標準展開・一部 unzip）のエンコーディング差で名前が化け、v2.3 のメタ除外を
+  すり抜けてリポジトリへ混入する事故を実測した。ASCII 名で構造的に回避し、
+  インストーラ側も README<em>/PROMPT_</em> のプレフィックス除外で二重化した。</li>
+<li><strong>メタ3ファイルをリポジトリに入れない</strong>（G3）: 本書と PROMPT 2本は「インストールの説明書」
+  であり、配置後のリポジトリには残らない（<code>.guardrails/GUARDRAILS.md</code> §11 が手順の正本として残る）。</li>
+</ul>
+<h2 id="v22-v21-guardrailsgoalsmd-g">v2.2 での変更点（v2.1 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>コミット毎の全検査二重実行を解消</strong>（G11）: pre-commit は stages 未指定のフックを
+  「インストール済みの全フック種」で走らせる仕様のため、衛生〜構造検査がコミット毎に
+  2回＋push でさらに1回走っていた。<code>default_stages: [pre-commit]</code> で半減（実測: 2回→1回）。</li>
+<li><strong>「install 忘れ＝静かに無効」を心得から機械検査へ</strong>（G7/G9）: <code>HARD:hook-type-missing</code>
+  （フック種追加後の <code>pre-commit install</code> 忘れ）・<code>HARD:hooks-path-overridden</code>
+  （core.hooksPath 設定済み＝シム無効の静的検出）・<code>SOFT:hooks-not-installed</code>
+  （出荷直後の正常状態。Step 3 で解消）。CI ではスキップ。</li>
+<li><strong>防壁ファイル自体を <code>missing-required</code> の対象に</strong>（G7/G9）: <code>.pre-commit-config.yaml</code>・
+  フック2本・<code>settings.json</code>・<code>guardrails-ci.yml</code>・<code>scripts/</code> 5本等——防壁が消えるのは fail-open の最悪形。</li>
+<li><strong>列充填の取りこぼし検出 <code>HARD:binding-dead-pattern</code></strong>（G9/G4）: パターン辞書の拡張子が
+  <code>CODE_EXTS</code> に無く検査が永久に不発、という静かな不発を hard で検出。</li>
+<li><strong>GOALS 運用ルールの機械化 <code>HARD:governance-without-goal</code></strong>（G5/G7）: 正本3文書
+  （GOALS/GUARDRAILS/catalog）を変更するコミットはメッセージにG引用が必須（commit-msg 検査3）。</li>
+<li><strong>主防壁に <code>pre-commit uninstall</code> 検出を追加</strong>（G7/G9）: deny は前方一致のみで
+  <code>uvx pre-commit uninstall</code> 等が素通りだった——force push と同じ二重構造に。</li>
+<li><strong>カタログの paste-block を加算形に統一</strong>（G13/G5）: ts-react-web@2 / python-uv@2。
+  代入形は「複数列の併用」で後貼りが先の列を静かに消していた。</li>
+<li><strong><code>scripts/</code> をログ出口検査から既定除外</strong>（G13/G9・<code>LOG_EXIT_PREFIXES</code>）: python 系の列を
+  採用した瞬間、キット自身の scripts 5本（§7・§12.1 の契約で stdout/stderr 直書きが正）が
+  <code>log-direct-call</code> 24件で落ちる実測バグを修正。</li>
+<li><strong>CI にハング保険 <code>timeout-minutes</code></strong>（G11）: §9.1「無限に待つCI＝最悪の出戻り」のCI自身への適用。</li>
+</ul>
+<h2 id="v2-v1-guardrailsgoalsmd-g">v2 での変更点（v1 からの増築。根拠は <code>.guardrails/GOALS.md</code> のG）</h2>
+<ul>
+<li><strong>契約とバインディングの完全分離</strong>（G5/G13）: 言語固有値は <code>bindings/catalog.md</code> の
+  検証済み列へ退去。出荷状態は言語なし——<code>check</code> を走らせると <code>SOFT:binding-unstamped</code>（Step 0 の刻印
+  <code>BINDING-SOURCE: 列ID@版</code> で解消）・<code>HARD:missing-required CLAUDE.md</code>（雛形が
+  <code>CLAUDE.md.template</code> のため——Step 1 で解消）・<code>SOFT:hooks-not-installed</code>（Step 3 の
+  <code>pre-commit install</code> で解消——v2.2）の3件が出て exit 1 になるのが<strong>正常</strong>。
+  刻印の値不一致・一部ファイルのみの刻印は <code>HARD:binding-drift</code>。</li>
+<li><strong>ランタイム契約 §12</strong>（G1/G2/G4）: 共通動詞 <code>scripts/dev.py</code>
+  （up/reset/seed/time/test/e2e/fmt/check/db）・操作レール（Web列は Playwright MCP を
+  <code>.mcp.json</code> で配線。<code>settings.json</code> は自動有効化済み）・観察レール・時刻注入・
+  外部I/O検疫（hard <code>test-network</code>）・UIテストID強制（hard <code>ui-missing-testid</code>）。</li>
+<li><strong>目標の正本 <code>.guardrails/GOALS.md</code></strong>（G1〜G14）: キット・規約への変更はGの引用が必須。</li>
+<li><strong>新Step</strong>: Step 0 にD表（ランタイム）、Step 8b（ランタイムレール敷設）。</li>
+</ul>
+<h2 id="1-zip">1. 配置 — zip をルートに置くだけ（手動コピーはしない）</h2>
+<p><strong>ダウンロードした <code>guardrails-kit-*.zip</code> を対象リポジトリのルートにそのまま置く。</strong>
+展開もコピーも不要——実際の配置は Claude Code / Codex が同梱の <code>scripts/install_kit.py</code> で
+機械的に行い、成功したら zip を自動で片付ける。既に自分で展開してある場合は、その
+フォルダごとルートに置けば同じように動く（zip 推奨の理由: 1ファイル＝部分コピー事故が
+起きない・後片付けの対象が明確・再配布が容易）。</p>
+<p>手で1ファイルずつコピーしない理由は既存ファイルとの衝突で、<code>.gitignore</code>・
+<code>.claude/settings.json</code>・<code>.codex/hooks.json</code>・<code>.pre-commit-config.yaml</code>・CI などは既存リポジトリに高確率で
+先住している。インストーラの規則は fail-closed（G9）:</p>
+<table>
+<thead>
+<tr>
+<th>状況</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>対象に無い / バイト同一</td>
+<td><code>INSTALLED</code> / <code>OK</code>（冪等——何度でも再実行できる）</td>
+</tr>
+<tr>
+<td><code>.gitignore</code> が既存</td>
+<td>キット区画（<code>&gt;&gt;&gt; guardrails-kit &gt;&gt;&gt;</code>）を末尾へ<strong>追記</strong> <code>MERGED</code></td>
+</tr>
+<tr>
+<td><code>.gitattributes</code>・<code>.pre-commit-config.yaml</code>・<code>.claude/settings.json</code>・<code>.codex/hooks.json</code> が既存</td>
+<td>検証条項を満たせば <code>KEPT</code>（既存維持）、満たさなければ<strong>上書きせず</strong> <code>CONFLICT</code>＋解消ヒント</td>
+</tr>
+<tr>
+<td>キット系統ファイルの旧版（コミット済み・クリーン）</td>
+<td><code>UPGRADED</code>（旧内容は git 履歴が安全網。未コミット変更があれば <code>CONFLICT</code> で停止）</td>
+</tr>
+<tr>
+<td>充填先 Python 4ファイル、YAML 2ファイル（pre-commit / CI）、CODEOWNERSの旧版</td>
+<td><code>UPGRADED</code>——名前付き管理区画とCODEOWNERの独自規則・複数/パス別ownerを<strong>既存から引き継ぐ</strong>（v2.53）。Python/YAMLの区画マーカー、またはCODEOWNERSの実ownerが無い旧版は <code>CONFLICT:unmarked-binding</code>（充填の黙失防止）</td>
+</tr>
+<tr>
+<td>キット系統でない同名ファイル</td>
+<td><code>CONFLICT:foreign</code>（内容確認・手動統合を促す）</td>
+</tr>
+</tbody>
+</table>
+<p>CONFLICT が1件でもあれば exit 1 で止まり、<strong>何も削除しない</strong>。0件になった実行の最後に
+zip・展開元フォルダを自動削除する（残したい場合は <code>--keep-source</code>）。</p>
+<p>追加モード（v2.42——いずれも書き込みなし）: <code>--detect</code> = 採用列の候補をマニフェストから
+提示（Step 0 の前段・キット展開不要）／ <code>--diff</code> = 適用した場合の判定と差分行数の
+プレビュー／ <code>--check</code> = ドリフト検出（全て OK/KEPT/SKIPPED なら exit 0——CI から
+「導入先が新版に追随しているか」を機械判定できる）。</p>
+<p>インストール後の姿（メタ——本書・<code>README.md</code>・PROMPT 4本（新規/既存/更新/Codex）・
+<code>surveys/</code>・<code>docs/plans/</code>——は移植先へは入らない）:</p>
+<pre><code>リポジトリルート/
+├── .guardrails/GUARDRAILS.md                     … 契約の正本（言語なし）
+├── .guardrails/GOALS.md                          … 目標の正本（G1〜G14。変更はGを引用）
+├── bindings/
+│   └── catalog.md                    … 検証済みバインディング列（言語固有値の正本）
+├── .guardrails/BOOTSTRAP.md                      … ブートストラップ進捗台帳（✅ は監査器が再実行検証 — v2.12）
+├── AGENTS.md.template                … Step 1 で AGENTS.md に完成（全エージェント共通規約の正本 — v2.10）
+├── CLAUDE.md.template                … Step 1 で CLAUDE.md に完成（冒頭 @AGENTS.md＋Claude Code 固有の薄い層）
+├── .python-version                   … §7.1: uv が従う Python 版の正本
+├── .gitignore                        … キット区画（既存があれば区画を追記）
+├── .gitattributes                    … 改行 LF 固定（鮮度チェックの CRLF 偽陽性防止）
+├── .pre-commit-config.yaml           … §3・§4 の正本
+├── .claude/
+│   ├── settings.json                 … §2: フック配線 + permissions.deny（第二防壁）
+│   └── hooks/
+│       ├── guard_git_bypass.py       … §2: 迂回（--no-verify / SKIP= 等）と非可逆な作業消失を exit 2 でブロック（v2.23でPython化）
+│       ├── guard_human_wip.py        … §2c: 人間の未コミット変更への Edit/Write をブロック（v2.6・fail-open。v2.23でPython化）
+│       ├── session_baseline.py       … §2c: セッション開始時点の dirty パス集合を保存（v2.6・v2.24でPython化）
+│       ├── post_edit_format.py       … §1: 編集直後の整形（第1段・自動修正系。v2.24でPython化）
+│       ├── post_edit_lint.py         … §1: 編集直後の lint（第2段・判定系——v2.5・v2.24でPython化）
+│       └── stop_incomplete_guard.py  … §2b: 未完了のターン終了を差し戻す（条件A=未コミット・条件B=check赤 v2.9。fail-open・v2.24でPython化）
+├── .codex/
+│   ├── hooks.json                    … Codex の PreToolUse/PostToolUse/SessionStart/Stop 配線（`/hooks` で信頼）
+│   └── hooks/
+│       ├── codex_hook_adapter.py     … Codex の apply_patch から対象パスを抽出する橋渡し
+│       └── （防壁本体は `.claude/hooks/` を共用）
+├── .github/
+│   └── workflows/
+│       └── guardrails-ci.yml         … §5: 最終防衛線（キット名前空間——既存 CI と衝突しない）
+├── tests/
+│   └── guard_corpus.tsv              … §2: 迂回コーパス（期待&lt;TAB&gt;[前提&lt;TAB&gt;]コマンド、DENY/ALLOW・dirty/clean）
+└── scripts/
+    ├── install_kit.py                … 本節の配置・マージ・後片付け（再実行は冪等）
+    ├── repo_scan.py                  … §7.3: 共通走査（BINDING = 言語バインディング置き場）
+    ├── generate_structure.py         … §7.4: STRUCTURE.md を書いてよい唯一の主体
+    ├── check_structure.py            … §7.5: 構造検査（hard/soft）
+    ├── check_guard_corpus.py         … §2: コーパス再生＋probe 実体
+    ├── check_codex_hooks.py          … Codex フック設定・アダプタの回帰検査
+    ├── check_red_first.py            … §5: red-first 証明（fix テストが親で赤だった機械証明——CI の red-first ジョブが呼ぶ・v2.7）
+    ├── check_bootstrap.py            … §3.5: ブートストラップ監査（台帳の ✅ を再実行検証——虚偽✅の門・v2.12）
+    ├── dev.py                        … §12.1: ランタイム共通動詞（up/reset/…/probe/db）
+    └── check_commit_msg.py           … §3.4: メッセージ検査
+</code></pre>
+<ul>
+<li>フックはPythonで起動するため、手動配置でも <code>chmod +x</code> は不要。</li>
+<li><strong>移植元プロジェクトのルート <code>CLAUDE.md</code>（または <code>AGENTS.md</code>）原本を持っている場合は、
+  <code>CLAUDE.md.original</code> 等の名前で一緒に置く</strong>と Step 1 の精度が上がる（原本の章は
+  v2.10 以降 <code>AGENTS.md</code> 側へ移設して完成させる——テンプレートは .guardrails/GUARDRAILS.md §6 の
+  章マップからの再構成なので、原本にしか無い章 §6/§9/§11 は ★ のまま）。</li>
+</ul>
+<h2 id="2-1">2. 前提ツール（ユーザーのマシンに1回）</h2>
+<table>
+<thead>
+<tr>
+<th>ツール</th>
+<th>用途</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>git + GitHub リモート</td>
+<td>Step 9 の CI 実測に必須</td>
+<td>リモート未作成ならエージェントに <code>gh</code> で作らせてもよい</td>
+</tr>
+<tr>
+<td>uv</td>
+<td>§7.1: Python 系の唯一の実行経路</td>
+<td>無ければエージェントに公式インストーラで導入させてよい</td>
+</tr>
+<tr>
+<td>対象言語のツールチェーン</td>
+<td>整形・テスト・解析</td>
+<td>採用列の「前提ツール」欄（例: ts-react-web 列なら Node.js。Playwright MCP も npx 経由）</td>
+</tr>
+</tbody>
+</table>
+<p>pre-commit 本体は Step 3 で <code>uv tool install pre-commit==4.6.0</code> として導入する。</p>
+<h2 id="3">3. エージェントの起動と指示</h2>
+<ol>
+<li>Claude Codeなら新規 <code>PROMPT_claude_code.md</code>／既存 <code>PROMPT_claude_code_existing.md</code>、Codexなら
+   <code>PROMPT_codex.md</code> を開き、必要な入力を埋めて全文をコピーしておく
+   （<strong>先にコピーする</strong>——インストール成功時に zip は自動削除されるため）。</li>
+<li>リポジトリルートで選んだエージェントを起動し、コピーしたプロンプトを最初のメッセージとして
+   貼り付ける。エージェントが <code>install_kit.py</code> で配置（衝突があれば解消）まで行う。</li>
+<li>Claude Codeなら <code>.claude/settings.json</code>、Codexなら <code>.codex/hooks.json</code> の配置直後に <code>/hooks</code> で
+   返信を」と依頼される → <code>/hooks</code> で PreToolUse: Bash・Edit|Write|MultiEdit /
+   PostToolUse: Edit|Write|MultiEdit / Stop / SessionStart の4種5エントリが有効かを
+   確認し、信頼確認が出たら内容を見て承認して続行する。Codexは <code>apply_patch</code> を編集として
+   表示する（アダプタが対象パスを抽出する）。
+   <strong>ここが無効のままだと §1・§2・§2b・§2c の防壁が「静かに」存在しないことになる</strong>（fail-open）。
+   承認後、<code>git commit --no-verify</code> を1回試してみて<strong>実際にブロックされるか</strong>を確認する
+   （<code>/hooks</code> の表示が有効でも、<code>.claude/settings.json</code> を<strong>このセッション中に新規作成</strong>
+   した場合、プロセスが起動時にしかフック設定を読み込んでおらず反映されていない症状が
+   起こりうる——特に VSCode 拡張のパネル経由。ブロックされないなら、このセッションを
+   終了し、VSCode なら拡張のウィンドウをリロード（または別のターミナルで <code>claude</code> を
+   同じディレクトリで直接起動）してから新しいセッションで確認し直す）。</li>
+</ol>
+<p>既存リポジトリへ導入する場合の追加注意:
+- 必ず<strong>ブランチ上で</strong>導入させる（main 直 push・force push・履歴書き換えは既存用プロンプトが禁止済み）。
+- <code>.gitattributes</code> 導入時の改行正規化は巨大 diff を生むため、単独コミットになる（正常）。
+- 導入直後に全 hard 規則が効くとは限らない——既存違反が残る規則は .guardrails/GUARDRAILS.md §10 に
+  「清掃 Phase」として登録され、清掃と同一 PR で有効化される（見えない緩和ではなく、
+  見える猶予として管理される）。棚卸しレポートで件数と計画を確認できる。</p>
+<p>あとはエージェントが .guardrails/GUARDRAILS.md §11 の Step 0→10（骨格作成 → スクリプト調整 →
+pre-commit 導入 → 迂回防止 → commit-msg → push 段 → ログ出口 → テスト決定性 → CI →
+総合監査）を、各 Step で違反注入テストをしながら進める。</p>
+<h2 id="4">4. 完了の確認（ユーザー側の抜き取り検査）</h2>
+<ul>
+<li>.guardrails/GUARDRAILS.md 内の Step チェックリストが全行 ✅ で、各 ✅ が実装と同一コミットに入っている。</li>
+<li>ルートに <code>guardrails-kit*.zip</code>・展開フォルダが残っていない（インストーラの後片付け済み）。</li>
+<li><code>.github/workflows/guardrails-ci.yml</code> が存在し、既存の自前 CI と重複ジョブになっていない。</li>
+<li>わざと <code>print(...)</code> を1行足してコミット → <code>HARD:log-direct-call</code> で落ちる。</li>
+<li><code>git commit --no-verify</code> と打ってみる → ブロックされる。</li>
+<li><code>git push origin main --force</code> のように<strong>引数順を変えた force push</strong> を打ってみる → ブロックされる。</li>
+<li><code>uvx pre-commit uninstall</code> と打ってみる → ブロックされる（経由を変えた取り外しの迂回）。</li>
+<li><code>uv run scripts/dev.py probe "git push -f"</code> → <code>DENY guard: …</code> が返る（事前照会の生存確認）。</li>
+<li><code>uv run scripts/check_guard_corpus.py</code> → <code>[guard-corpus] 全76行 PASS</code>。guard の規則を
+  1つコメントアウトして再実行 → <code>HARD:guard-corpus-mismatch</code> で落ちる（戻して再確認）。</li>
+<li>ファイルを1つ書き換えた（未コミットの）状態で <code>git reset --hard</code> と打ってみる →
+  ブロックされる。<code>git stash</code> で退避してから同じコマンド → 素通しする（§2 作業消失ガード）。</li>
+<li>ファイルを1つ<strong>人間の手で</strong>書き換えたまま新しいセッションを開始し、そのファイルを
+  Claude CodeまたはCodexに編集させてみる → ブロックされる。<code>git stash</code>（または commit）→ 通る
+  （§2c 所有権ガード——自動解除の確認）。</li>
+<li>採用列に「非推奨・世代交代パターン」がある場合: 対象の旧 API（例: python 列なら
+  <code>datetime.utcnow()</code>）を1行足してコミット → <code>HARD:deprecated-api</code> で落ちる（§3.3）。</li>
+<li>レイヤー直下に新規ディレクトリを作る <code>feat:</code> を plan 差分なしでコミット →
+  <code>HARD:feat-without-plan</code> で<strong>落ちる</strong>。<code>plan.md</code> に根拠1行を足すと通る。refactor: を
+  名乗っても通る（§3.4 検査5——v2.8 で hard・G14。逃げ道の意味論の確認）。</li>
+<li>依存マニフェストに適当な1行を足して <code>feat: x</code> でコミット → <code>HARD:undeclared-dependency</code>
+  で落ちる。本文に <code>依存追加: &lt;名前&gt; — 理由1行</code> を書く → 通る（§3.4 検査4）。</li>
+<li>lint 違反（未使用 import 等）を含む編集をさせてみる → 直後に指摘が返り、Claude が
+  その場で直す（§1 第2段。ツール未導入なら「lint 未導入」の1行表示で素通り）。</li>
+<li>変更を残したままターンを終えさせようとする → 差し戻される（§2b。<code>BLOCKED:</code> 先頭の
+  報告かコミット完了でのみ終了できる）。</li>
+<li><code>.git/hooks/commit-msg</code> を手で削除してコミットしてみる → <code>HARD:hook-type-missing</code> で落ちる
+  （install 忘れの機械検出）。<code>pre-commit install</code> で復旧して再確認。</li>
+<li>STRUCTURE.md を手で編集させようとする → 拒否される。</li>
+<li>PR を1本作る → CI の checks / テストジョブがすべて緑。既定ブランチへの直接 push は
+  サーバー側の「PR 必須」ルールで拒否される。</li>
+<li><code>uv run scripts/dev.py reset</code> → 同一操作2回 → 状態が一致する（G1 の抜き取り）。</li>
+<li><code>uv run scripts/dev.py verbs</code> → 全動詞が「配線済み」（未配線が残るなら Step 8b が未完）。</li>
+</ul>
+<p>1つでも素通りしたら、その項目は 🚧 に戻して再実装させる（.guardrails/GUARDRAILS.md §10 実行規律 4 の監査ルール）。</p>
+<h2 id="5">5. 注意</h2>
+<ul>
+<li><strong>STRUCTURE.md は生成物</strong>。手で編集しない（deny 済み）。更新は
+  <code>uv run scripts/generate_structure.py</code>。</li>
+<li>pre-commit のフック種（<code>default_install_hook_types</code>）を変えたら <code>pre-commit install</code> を
+  再実行する（忘れると新フックは静かに無効 — .guardrails/GUARDRAILS.md §0）。</li>
+<li><code>.claude/settings.json</code> の <code>permissions.deny</code> は<strong>前方一致の第二防壁</strong>。引数の順番を変えた
+  迂回（例: <code>git commit -m "x" --no-verify</code>・<code>git push origin -f</code>）は主防壁の
+  <code>guard_git_bypass.py</code> が引用符除去つきの全文走査で塞ぐ、という二重構造になっている。
+  guard は <code>--no-verify</code>/<code>-n</code>・<code>SKIP=</code> に加え、force push（<code>--force</code>/<code>-f</code>）・
+  <code>core.hooksPath</code> の付け替え・<code>pre-commit uninstall</code>（フック本体の差し替え/取り外し＝
+  全フック迂回）もブロックする。v2.5 からは<strong>非可逆な作業消失</strong>（<code>.git</code> を含む <code>rm -rf</code>＝
+  常時、<code>git reset --hard</code> 等＝未コミット変更がある時だけ）も同じ guard の節が塞ぐ——
+  消してよい変更は先に <code>git stash</code> で退避すれば同じコマンドが素通しになる。
+  既に迂回された<strong>状態</strong>（hooksPath 設定済み・シム欠落）は
+  <code>check</code> の <code>hooks-path-overridden</code> / <code>hook-type-missing</code> が静的に検出する（v2.2）。
+  この guard の挙動自体は <code>tests/guard_corpus.tsv</code> の再生（dirty/clean の前提列を含む）で
+  回帰保護され、<code>dev.py probe "&lt;cmd&gt;"</code> で実行前に照会できる（v2.4 — .guardrails/GUARDRAILS.md §2）。</li>
+<li><strong>ターン終了ゲート（§2b）は fail-open</strong>。差し戻しが3回続くと素通しになる（無限ループ
+  防止の仕様）。ゲートが黙ったからといって規律7が消えたわけではない。v2.9 からは
+  クリーンなツリーでも <code>dev.py check</code> が赤なら差し戻される（<strong>条件B</strong>——check の
+  内部エラーや uv 不在は素通し＝fail-open の向きは同じ。uv 不在時は表示1行が出る）。</li>
+<li><strong>所有権ガード（§2c）も fail-open</strong>。baseline 不在（SessionStart 未発火等）は警告1行で
+  素通しになる——警告を見かけたら <code>/hooks</code> で SessionStart の有効を確認する。守れるのは
+  「セッション開始時点で dirty だったファイル」だけで、セッション中の人間との並行編集は
+  対象外（仕様——.guardrails/GUARDRAILS.md §2c）。</li>
+<li><code>~/.claude/CLAUDE.md</code>（ユーザーグローバル）や <code>CLAUDE.local.md</code>、他エージェントの
+  ツール別ルール（<code>.clinerules</code> / <code>.cursor/rules</code> 等）にキットの規則と矛盾する指示を
+  書かない（G5——規約の正本はリポジトリ内の AGENTS.md（＋Claude Code 固有の CLAUDE.md）。
+  層が違う指示は静かに競合し、門ではなく心得側から崩れる）。</li>
+<li><strong><code>AGENTS.md</code>・<code>CLAUDE.md</code>・<code>STRUCTURE.md</code> を .gitignore に入れない</strong>（判断ごと記録）:
+  規約は統治するコードと<strong>同じコミットに固定</strong>されて初めて、CI の再現性（G1）・
+  単一の正（G5）・規則変更のレビュー可能性が成立する——中央同期（Agent Rules MCP）を
+  不採用にしたのと同じ理由の裏面。STRUCTURE.md は生成物だが、<strong>追跡されていること
+  自体が §3.2 の鮮度検査（コミット内容 vs 再生成の diff）の前提</strong>であり、決定性設計
+  （タイムスタンプなし・LF 固定 — §7.4）はまさに追跡可能にするための投資。ignore して
+  よいのはセッション・一時状態（<code>.claude/session/</code>・<code>.codex/session/</code>・<code>.red-first-*/</code>——同梱済み）だけ。</li>
+<li>キットの gitleaks / pre-commit-hooks の <code>rev</code> は実在する固定タグにしてある。導入時に
+  Claude Code が <code>pre-commit autoupdate</code> で最新へ固定し直す（Step 3）。</li>
+</ul>
+</body>
+</html>

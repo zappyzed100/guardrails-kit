@@ -1,5 +1,5 @@
-# install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.md §1）
-"""install_kit.py — ガードレール・キットの機械的インストーラ（README_SETUP.md §1 / .guardrails/GUARDRAILS.md §11 前段）
+# install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.html §1）
+"""install_kit.py — ガードレール・キットの機械的インストーラ（README_SETUP.html §1 / .guardrails/GUARDRAILS.md §11 前段）
 
 役割: zip または展開フォルダで対象リポジトリのルートに置かれたキットを、既存ファイルを
 **決して黙って上書きせずに**ルートへ展開する。判定は決定的（G1）、結果は1行1ファイルの
@@ -54,7 +54,7 @@ from pathlib import Path
 
 # --- 配置対象から除外するメタファイル（インストーラの説明書。リポジトリへは入れない）---
 META_FILES = {
-    "README_SETUP.md",
+    "README_SETUP.html",
     "PROMPT_claude_code.md",
     "PROMPT_claude_code_existing.md",
     ".guardrails-kit-source",  # キット原本判定マーカー（§3.3 kit-source-exempt）。導入先には複製しない
