@@ -609,7 +609,9 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
             n = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
             if n > rs.MAX_FILE_LINES:
                 out.append(("SOFT", "file-too-long", f"{rel}:{rs.MAX_FILE_LINES + 1}",
-                            f"{rs.MAX_FILE_LINES}行超（現在 {n} 行）— 分割を検討"))
+                            f"{rs.MAX_FILE_LINES}行超（現在 {n} 行）— 行数は分割要否の代理指標に"
+                            "過ぎない。分けるなら関心事の軸で（結合した意味論を機械的な行数分割で"
+                            "引き裂かない — AGENTS.md §1）"))
 
     # 1フォルダに CLAUDE.md 以外で7ファイル超（例外フォルダは表B — §3.3）
     counts: dict[str, int] = {}
@@ -623,7 +625,9 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
             continue
         if counts[d] > rs.MAX_DIR_FILES:
             out.append(("SOFT", "dir-too-crowded", d or "(root)",
-                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— サブフォルダ化を検討"
+                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— この上限は"
+                        "人間の`ls`一覧性のためでLLMの探索性への効きは弱い。サブフォルダ化ではなく"
+                        "関心事で分けられないかをまず検討する"
                         "（分割で作る新フォルダには CLAUDE.md の新設も検討する — AGENTS.md §13）"))
 
     # 役割一行ヘッダー
