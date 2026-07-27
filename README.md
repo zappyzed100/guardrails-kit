@@ -120,7 +120,7 @@ sentinel 実測——v2.42）と、実 UI を触る操作レール・コンソ�
   **ローカル門では原理的に守れない層**の記録、Meta ACH と同型へ独立収斂した違反注入の裏書き。
 - `.guardrails/GUARDRAILS.md` §10 の Phase 節 — 各機構の契約・違反注入の実測・境界の1行明示。
 - `scripts/check_bootstrap.py` — 虚偽✅の再実行監査。約250行で読み切れます。
-- `README_SETUP.md` の各版セクション — 変更だけでなく**是正の記録**（自分のミスの検出と
+- `README_SETUP.html` の各版セクション — 変更だけでなく**是正の記録**（自分のミスの検出と
   修正——検査番号の欠番、規則IDの記載漏れ等——も監査結果として残しています）。
 - `.guardrails/CUSTOMIZE.md` — 導入後にカスタムできる項目の索引。ブートストラップ完了後の入口。
 
@@ -182,7 +182,7 @@ Claude Code / Codex はフック層（編集直後・編集/操作直前・タ�
 何ができるかを知るだけなら読まなくてよい——`uv run scripts/dev.py gates` が実状態つきの
 全機能一覧（上述）。契約まで読むなら:
 `.guardrails/GOALS.md`（目標の正本・14条）→ `.guardrails/GUARDRAILS.md`（契約の正本。困った時は §0 の一次対応表）
-→ `README_SETUP.md`（配置手順・全変更履歴・不採用記録）→ `bindings/catalog.md`
+→ `README_SETUP.html`（配置手順・全変更履歴・不採用記録）→ `bindings/catalog.md`
 （言語固有値の正本: TypeScript/React・Python・Flutter・Rust）→ `surveys/`（判断の出典）。
 
 ## このリポジトリ自体の運用
@@ -196,4 +196,4 @@ Claude Code / Codex はフック層（編集直後・編集/操作直前・タ�
 - 配布は「版 = git タグ」＋ Release。zip はコミットしない（木と zip の二重正本は
   ドリフトの温床——キット自身の G5 が禁じる型）。
 - 現行版はリポジトリの **git タグ**が正本（変更履歴と不採用判断の全記録は
-  `README_SETUP.md` の各版セクション）。
+  `README_SETUP.html` の各版セクション）。

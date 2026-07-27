@@ -38,7 +38,7 @@ scripts/install_kit.py         対象リポジトリへ配置（INSTALLED/MERGED
 ## 技術選定理由
 
 - **Python + uv**: 全検査器・フックの実行系。v2.23 でbash/jqへの依存を廃し、Windows/PowerShell
-  経路も含めて単一ランタイムに統一した（README_SETUP.md v2.23）。
+  経路も含めて単一ランタイムに統一した（README_SETUP.html v2.23）。
 - **pre-commit フレームワーク**: コミット時の門の配線基盤。ローカルフックとCIの
   `guardrails-ci.yml` が**同一定義**を再実行することで、フック未導入環境を最終防衛線でも塞ぐ。
 - **GitHub Actions + pull_request_target**: `guardrails-trusted.yml` はbase branchのコードだけを
@@ -68,7 +68,7 @@ scripts/install_kit.py         対象リポジトリへ配置（INSTALLED/MERGED
 
 - 版はgitタグを正本とする。zipはコミットしない（配布はReleaseのみ）。現時点では初回タグを
   未作成——`.guardrails-kit-source`マーカーを持つ本リポジトリが原本。
-- 変更履歴・是正記録の正本は `README_SETUP.md` の各版セクション（直近はv2.49〜v2.52）。
+- 変更履歴・是正記録の正本は `README_SETUP.html` の各版セクション（直近はv2.49〜v2.52）。
   追記はチャット口調でなく監査記録として書く。
 - 出荷状態は自己検査に意図的な指摘5件を残す（AGENTS.md/CLAUDE.mdがテンプレのため）——
   原本マーカーによりこのリポジトリ自身は3件softへ降格・exit 0（v2.14）。導入先では
