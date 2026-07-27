@@ -30,6 +30,23 @@
 | 既にコードがあるリポジトリ | `PROMPT_claude_code_existing.md` | 棚卸し（Step -1）→ 違反が残る規則は BINDING で一時停止し §10 に清掃 Phase 登録 → 規則ごとに「清掃＋再有効化＋違反注入」を1PRずつ |
 | 導入済みリポジトリの新版更新 | `PROMPT_claude_code_update.md` | インストーラ再実行（UPGRADED——git 履歴が安全網）→ 消えた充填を履歴から復元 → §10 の Phase 見出し diff で新しい門を列挙 → 門ごとに違反注入 DoD |
 
+## v2.61 での変更点（フォルダ構成規約を関心事分割へ再定義し、慢性化したsoft違反の検出を追加。根拠は `.guardrails/GOALS.md` の G3/G9）
+
+- AGENTS.md §1/§2（ファイル500行・フォルダ7ファイルの規約）の軸を行数/個数から関心事へ
+  再定義した。500行/7ファイルは分割要否の代理指標であり、結合した意味論（例: 同じ制約族の
+  モデル構築とペナルティ計上）を機械的な行数分割で引き裂かない方針を明文化した。
+- soft `chronic-soft-violation` を追加した。`file-too-long` / `dir-too-crowded` が
+  ローカルの違反ログ（`.guardrails/violations.jsonl`・§3.6）上で既定5回以上の
+  `check-structure` 実行にまたがって出続けている箇所を検出する——関心事分割によって
+  1回の見送りを許容した代わりに、無理由の放置が積み重なる経路を塞ぐ。
+
+## v2.60 での変更点（check_bootstrap Step 3のCI誤検知を是正。根拠は `.guardrails/GOALS.md` の G7/G9）
+
+- `checks` ジョブの `pre-commit run --all-files` は `pre-commit install` を経ないため、Step 3 が
+  ✅ の採用先は `assert_step_3` のシム実在検査が構造的に必ず赤化していた。
+- `check_structure.py` の `check_hooks_installed` と同じ `CI` 環境変数判定を `assert_step_3` にも
+  揃え、CI ではシム検査をスキップする（ローカルでのシム未インストール検出は従来どおり維持）。
+
 ## v2.59 での変更点（インストーラのGit index隔離。根拠は `.guardrails/GOALS.md` の G1/G7/G9）
 
 - 呼出元の`GIT_INDEX_FILE`が直インストールへ混入し、別repositoryの追跡集合を配布する欠陥を修正。

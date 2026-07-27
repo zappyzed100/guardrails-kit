@@ -681,6 +681,14 @@ MAX_DIR_FILES = 7
 DIR_COUNT_EXEMPT = ("", "scripts", "bindings")   # "" = ルート直下（設定ファイル群が集まるため例外）
 REQUIRED_SOFT_PATHS: list[str] = []
 
+# --- 慢性化した soft 違反の検出（§3.3 chronic-soft-violation・Phase 63）---
+# 関心事分割（AGENTS.md §1/§2）は「理由があれば1回のsoft警告は見送ってよい」を前提に
+# 行数/個数の機械分割を緩めた。無理由の放置がそのまま積み重なる経路を塞ぐため、
+# ローカルの違反ログ（VIOLATION_LEDGER_REL・§3.6）で同一箇所が何回の check-structure
+# 実行にまたがって出続けたら「慢性」とみなすかをここで定義する。
+CHRONIC_SOFT_RULES = frozenset({"file-too-long", "dir-too-crowded"})
+CHRONIC_SOFT_THRESHOLD = 5
+
 # --- シンボル抽出の言語ディスパッチ（表A: 公開シンボル抽出。列充填。実装は中盤）---
 # 例: {".dart": _dart_public_symbols, ".rs": _rust_public_symbols,
 #      ".ts": _ts_public_symbols, ".tsx": _ts_public_symbols, ".py": _py_public_symbols}
@@ -759,6 +767,9 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("context-doc-too-large", "§3.3 コミット時", "always", "常時読込文書の肥大警告（soft・Skills 化のセンサー）"),
     ("file-too-long", "§3.3 コミット時", "always", "1ファイル500行超の警告（soft）"),
     ("dir-too-crowded", "§3.3 コミット時", "always", "1フォルダ7ファイル超の警告（soft）"),
+    ("chronic-soft-violation", "§3.3 コミット時", "always",
+     "同一箇所の file-too-long/dir-too-crowded が複数回の実行にまたがって慢性化（soft・"
+     "ローカル違反ログ §3.6 が土台）"),
     ("missing-role-header", "§3.3 コミット時", "var:HEADER_REQUIRED_EXTS", "役割一行ヘッダーの欠落警告（soft）"),
     ("missing-folder-claude-md", "§3.3 コミット時", "var:REQUIRED_SOFT_PATHS", "レイヤーCLAUDE.md の欠落警告（soft）"),
     ("orphan-file", "§3.3 コミット時", "var:ORPHAN_UNIVERSES", "どこからも import されない孤立ファイル警告（soft）"),

@@ -609,7 +609,9 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
             n = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
             if n > rs.MAX_FILE_LINES:
                 out.append(("SOFT", "file-too-long", f"{rel}:{rs.MAX_FILE_LINES + 1}",
-                            f"{rs.MAX_FILE_LINES}行超（現在 {n} 行）— 分割を検討"))
+                            f"{rs.MAX_FILE_LINES}行超（現在 {n} 行）— 行数は分割要否の代理指標に"
+                            "過ぎない。分けるなら関心事の軸で（結合した意味論を機械的な行数分割で"
+                            "引き裂かない — AGENTS.md §1）"))
 
     # 1フォルダに CLAUDE.md 以外で7ファイル超（例外フォルダは表B — §3.3）
     counts: dict[str, int] = {}
@@ -623,7 +625,9 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
             continue
         if counts[d] > rs.MAX_DIR_FILES:
             out.append(("SOFT", "dir-too-crowded", d or "(root)",
-                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— サブフォルダ化を検討"
+                        f"1フォルダに{rs.MAX_DIR_FILES}ファイル超（現在 {counts[d]}）— この上限は"
+                        "人間の`ls`一覧性のためでLLMの探索性への効きは弱い。サブフォルダ化ではなく"
+                        "関心事で分けられないかをまず検討する"
                         "（分割で作る新フォルダには CLAUDE.md の新設も検討する — AGENTS.md §13）"))
 
     # 役割一行ヘッダー
@@ -640,6 +644,52 @@ def check_soft_limits(files: list[str], texts: dict[str, str], out: list[Finding
         parent = req.rsplit("/", 1)[0] + "/"
         if req not in tracked and any(f.startswith(parent) for f in files):
             out.append(("SOFT", "missing-folder-claude-md", req, "フォルダ CLAUDE.md が無い"))
+
+
+def check_chronic_soft_violations(root: Path, out: list[Finding]) -> None:
+    """慢性化した file-too-long / dir-too-crowded の検出（soft `chronic-soft-violation`）。
+
+    関心事分割（AGENTS.md §1/§2）は「理由があれば1回のsoft警告は見送ってよい」を前提に
+    行数/個数の機械分割を緩めた——その代わり、無理由の放置がそのまま積み重なる経路を
+    塞ぐ役目をこの検査が持つ。ローカルの違反ログ（.guardrails/violations.jsonl・§3.6・
+    gitignore 済み）を土台にするため、同じ開発機での連続実行にのみ効く（新規clone・CIでは
+    ログが無く不発——binding-unstamped と同じ「見える猶予」の性質。手動注入コーパスの
+    対象外——複数回の実行履歴の蓄積が前提で、単発追加のランナーでは再現できない）。
+
+    台帳は追記専用で解消済みの過去違反も残るため、**今回の実行でまだ現に鳴っている
+    箇所だけ**を対象にする（`out` は check_soft_limits 済みで file-too-long /
+    dir-too-crowded の現在の findings を持つ——呼び出し順は main() が保証）。これが
+    無いと、既に関心事で正しく割った/解消した箇所を台帳の古い記録だけで鳴らし続ける
+    （dogfooding で実測: 削除済み検証用フォルダの記録がログに残って誤検知した）。
+    """
+    active = {(rule, loc) for sev, rule, loc, *_ in out if rule in rs.CHRONIC_SOFT_RULES}
+    if not active:
+        return
+    ledger = root / rs.VIOLATION_LEDGER_REL
+    try:
+        text = ledger.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    runs: dict[tuple[str, str], set[str]] = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        key = (row.get("rule_id"), row.get("location", ""))
+        if key not in active:
+            continue
+        runs.setdefault(key, set()).add(row.get("ts", ""))
+    for (rule, loc), timestamps in sorted(runs.items()):
+        n = len(timestamps)
+        if n >= rs.CHRONIC_SOFT_THRESHOLD:
+            out.append(("SOFT", "chronic-soft-violation", loc,
+                        f"{rule} が現在も違反中のままローカルで{n}回の check-structure 実行に"
+                        "またがって出続けている——1回の見送りと慢性放置は別。関心事の切り方"
+                        "自体を見直すか、割った上でなお正当ならその理由を近くに書き残す"
+                        "（AGENTS.md §1/§2）"))
 
 
 def check_orphans(root: Path, files: list[str], texts: dict[str, str], out: list[Finding]) -> None:
@@ -705,6 +755,7 @@ def main() -> int:
     check_installer_tokens(root, tracked, findings)
     check_binding_source(root, tracked, findings)
     check_soft_limits(files, texts, findings)
+    check_chronic_soft_violations(root, findings)
     check_orphans(root, files, texts, findings)
 
     for sev, rule, loc, msg in findings:
