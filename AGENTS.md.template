@@ -73,6 +73,12 @@ glob・パス推測ともに探しやすく、同数のファイルを機械的�
 - 出戻り防止の地図 = `.guardrails/GUARDRAILS.md`
 - 目標の正本 = `.guardrails/GOALS.md`（規約・キットへの変更はGを引用する）
 - バインディングの正本 = `bindings/catalog.md`（採用列: ★列ID@版）
+- **文書の書式**: 人間だけが読む文書（導入手順・調査ノート・変更履歴等）は HTML（`.html`）で
+  書く。AI/ツールが §記法・grep索引・自動生成で構造的に参照する契約文書（本書 AGENTS.md・
+  CLAUDE.md・`.guardrails/GUARDRAILS.md`・`.guardrails/GOALS.md`・`bindings/catalog.md`・
+  自動生成される `STRUCTURE.md`）は Markdown のまま据え置く。**例外**: リポジトリ直下の
+  `README.md` は GitHub 等のリポジトリトップページ自動プレビューに使われるため Markdown の
+  まま据え置く。
 
 ## §5 フォルダ独立性・依存方向
 ★ 表Bのレイヤー図をここに描く。依存は一方向のみ。
