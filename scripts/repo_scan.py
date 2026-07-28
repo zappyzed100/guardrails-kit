@@ -621,6 +621,16 @@ DEPRECATED_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 PLAN_DOC_PATTERNS = [re.compile(p) for p in (r"(^|/)plan\.md$", r"^docs/plans/")]
 PLAN_LAYER_ROOTS: list[str] = []
 
+# --- ソース⇔doc 対（§3.4 検査9 doc-impact-undeclared — v2.63・soft 導入。列充填）---
+# 「このソースパターンが変わったら、この doc パターンの差分か本文の
+# `DOCS-NOT-NEEDED: 理由` が要る」という対応表（列充填。空なら不発——feat-without-plan
+# と同じ「列充填で有効化」）。グローバルな「scripts/ が変われば何か doc を触れ」ではなく
+# ソース→doc の対で書く（無関係な doc を1文字触るだけで門を通す抜け道を減らす——
+# 出典規律は bindings/catalog.md、設計判断は docs/plans/2026-07-28-doc-impact-check.md）。
+# 各要素: {"source": [正規表現...], "docs": [正規表現...], "label": "対応の一行説明"}
+DOC_IMPACT_RULES: list[dict] = []
+DOCS_NOT_NEEDED_PATTERN = re.compile(r"DOCS-NOT-NEEDED:\s*\S")
+
 # --- 確率的コンポーネント（表B）: 有る場合のみ設定（§9.1 test-calls-solver-direct）---
 SOLVER_DIRECT_CALL_PATTERNS: list[tuple[re.Pattern, str]] = []
 SOLVER_TEST_WRAPPER_NAME = "solve_for_test"   # この名前を含む行は許可（ラッパー経由）
@@ -788,6 +798,8 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
      "feat: のテスト欠落警告（soft）"),
     ("commit-too-large", "§3.4 コミット時", "always", "コミット規模の警告（soft）"),
     ("test-shrink", "§3.4 コミット時", "var:TEST_PATH_PATTERNS", "既存テストの純減警告（soft・弱体化の可視化）"),
+    ("doc-impact-undeclared", "§3.4 コミット時", "var:DOC_IMPACT_RULES",
+     "利用者影響のあるソース変更に対応 doc の差分も DOCS-NOT-NEEDED 理由も無い警告（soft・列充填で有効化）"),
     # --- §5 CI（最終防衛線）---
     ("red-first", "§5 CI", "static:CI（required・列充填で単一テスト実行）",
      "fix 同梱テストが親コミットで赤だった（バグを再現した）ことの機械証明"),

@@ -57,6 +57,7 @@
 
 - `docs/plans/2026-07-14-harness-tools-import.md`
 - `docs/plans/2026-07-15-test-log-3layer-rails.md`
+- `docs/plans/2026-07-28-doc-impact-check.md`
 - `docs/plans/PLAN_FORMAT.md`
 
 ## `scripts/`
@@ -169,6 +170,7 @@
 - def check_feat_plan
 - def check_feat_test
 - def check_test_shrink
+- def check_doc_impact
 - def check_commit_size
 - def main_single
 - def resolve_rev

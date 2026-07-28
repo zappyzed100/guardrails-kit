@@ -37,6 +37,15 @@
 #   （ファイル全体が diff で見える＝「黙って」ではない）／解釈不能な構文（警告1行で
 #   素通し——行指向の近似は仕様 — §7.4）。名前照合は大文字小文字と -/_ を畳んだ集合差、
 #   メッセージ照合は大小無視の部分一致。
+# 検査9（doc-impact-undeclared — v2.63・soft・列充填で有効化）: `DOC_IMPACT_RULES`
+#   （正本: repo_scan.py・列充填。空なら不発）の各対応につき、source 側にステージ済み
+#   変更があるのに docs 側の変更が無ければ、本文に `DOCS-NOT-NEEDED: 理由` が無い限り
+#   `SOFT:doc-impact-undeclared` を警告して通す。グローバルな「このフォルダが変わったら
+#   何か doc を触れ」ではなく対応表（source→docs のペア）で判定するため、無関係な doc を
+#   1文字触るだけで通す抜け道を作らない。feat-without-plan と同じ soft 導入経路
+#   （偽陽性率が未知の検査は soft で数タスク実測してから hard 昇格 — .guardrails/GOALS.md
+#   運用ルール）。出典・対応表の書き方は bindings/catalog.md、設計判断は
+#   docs/plans/2026-07-28-doc-impact-check.md。
 # 検査5（feat-without-plan — v2.6 soft 導入・**v2.8 hard 昇格＝G14「意図の保存」**）:
 #   `feat:` がレイヤー直下（正本: repo_scan.PLAN_LAYER_ROOTS——列充填・空なら不発）に
 #   HEAD に無い新規ディレクトリを作るのに、設計根拠文書（repo_scan.PLAN_DOC_PATTERNS——
@@ -374,6 +383,34 @@ def check_test_shrink(subject: str) -> None:
               ".guardrails/GUARDRAILS.md §3.4 検査8・調査④）")
 
 
+def check_doc_impact(staged: list[str], message_lines: list[str]) -> None:
+    """検査9（doc-impact-undeclared — soft・v2.63・列充填で有効化）。警告のみで exit へ影響しない。
+
+    `rs.DOC_IMPACT_RULES` の各対応（source 正規表現群・docs 正規表現群・label）につき、
+    source 側にステージ済み変更があるのに docs 側の変更が1つも無ければ、本文に
+    `DOCS-NOT-NEEDED: 理由` が無い限り警告する。列が空なら不発（feat-without-plan と同じ
+    「列充填で有効化」境界）。理由の妥当性は検証しない（存在検査のみ——NO-LOG /
+    RED-FIRST-EXEMPT と同じ境界の引き方）。
+    """
+    if not rs.DOC_IMPACT_RULES:
+        return
+    if rs.DOCS_NOT_NEEDED_PATTERN.search("\n".join(message_lines)):
+        return
+    for rule in rs.DOC_IMPACT_RULES:
+        source_res = rule["source"]
+        doc_res = rule["docs"]
+        label = rule.get("label", "対応表")
+        if not any(re.search(p, f) for f in staged for p in source_res):
+            continue
+        if any(re.search(p, f) for f in staged for p in doc_res):
+            continue
+        _emit("SOFT", "doc-impact-undeclared", label,
+              f"{label} に該当するソース変更があるが、対応する文書の差分が無い。"
+              "人間向け文書を同コミットで更新するか、本文に "
+              "`DOCS-NOT-NEEDED: 具体的な理由` を書く"
+              "（.guardrails/GUARDRAILS.md §3.4 検査9・bindings/catalog.md DOC_IMPACT_RULES）")
+
+
 def check_commit_size(staged: list[str]) -> None:
     """検査7（commit-too-large — soft・v2.13）。警告のみで exit へ影響しない。"""
     proc = subprocess.run(["git", "diff", "--cached", "--numstat"],
@@ -441,10 +478,11 @@ def main_single(msgfile: str) -> int:
     # 検査5: feat⇔plan 対（hard — §3.4・G14。検査4と同一実行で両方を列挙してから落とす）
     plan_violations = check_feat_plan(subject, staged)
 
-    # 検査6〜8（soft — v2.13/v2.18。警告のみ・exit へ影響しない）
+    # 検査6〜9（soft — v2.13/v2.18/v2.63。警告のみ・exit へ影響しない）
     check_feat_test(subject, staged)
     check_commit_size(staged)
     check_test_shrink(subject)
+    check_doc_impact(staged, message_lines)
 
     return 1 if (dep_violations or plan_violations) else 0
 
