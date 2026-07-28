@@ -621,6 +621,43 @@ DEPRECATED_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 PLAN_DOC_PATTERNS = [re.compile(p) for p in (r"(^|/)plan\.md$", r"^docs/plans/")]
 PLAN_LAYER_ROOTS: list[str] = []
 
+# --- ソース⇔doc 対（§3.4 検査9 doc-impact-undeclared — v2.63・soft 導入）---
+# 「このソースパターンが変わったら、この doc パターンの差分か本文の
+# `DOCS-NOT-NEEDED: 理由` が要る」という対応表。グローバルな「scripts/ が変われば何か doc
+# を触れ」ではなくソース→doc の対で書く（無関係な doc を1文字触るだけで門を通す抜け道を
+# 減らす——出典規律は bindings/catalog.md、設計判断は docs/plans/2026-07-28-doc-impact-check.md）。
+# 各要素: {"source": [正規表現...], "docs": [正規表現...], "label": "対応の一行説明"}
+#
+# 他の列充填変数（PLAN_LAYER_ROOTS 等）と異なり**空で出荷しない**——キット原本自身の
+# 実パスで充填済み。理由: 対応表が「プロジェクトごとに違う」性質そのものは同じだが、
+# ここに書く3件はいずれも**キットの導入・更新手順**という、キットを敷いたどのリポジトリ
+# にも共通で存在する構造（README_SETUP.html は `install_kit.py` の META_FILES で導入先に
+# 配置されないが、`GUARDRAILS.md`・`bindings/catalog.md` は導入先にも同じ相対パスで
+# 実在する）。導入先固有のアプリ構造（PLAN_LAYER_ROOTS の対象レイヤー等）とは性質が違う。
+# 適用対象が無いルール（docs 側がこのリポジトリに1件も存在しない）は
+# check_commit_msg.check_doc_impact() が自動的に不発にする——「絶対に満たせない SOFT」を
+# 導入先で鳴らし続けない安全弁（詳細はその関数の docstring）。
+# 採用先固有の対応（例: アプリの利用者向けドキュメントと実装の対）は += で追記する。
+DOC_IMPACT_RULES: list[dict] = [
+    {
+        "source": [r"^scripts/install_kit\.py$", r"^PROMPT_"],
+        "docs": [r"^README_SETUP\.html$"],
+        "label": "導入・更新手順",
+    },
+    {
+        "source": [r"^scripts/fill_bindings\.py$", r"^scripts/check_fill_bindings\.py$"],
+        "docs": [r"^README_SETUP\.html$", r"^bindings/catalog\.md$"],
+        "label": "列充填の仕組み（BINDING）",
+    },
+    {
+        "source": [r"^\.claude/hooks/", r"^\.codex/hooks/",
+                   r"^\.pre-commit-config\.yaml$", r"^\.github/workflows/"],
+        "docs": [r"^README_SETUP\.html$", r"^\.guardrails/GUARDRAILS\.md$"],
+        "label": "フック・CI配線",
+    },
+]
+DOCS_NOT_NEEDED_PATTERN = re.compile(r"DOCS-NOT-NEEDED:\s*\S")
+
 # --- 確率的コンポーネント（表B）: 有る場合のみ設定（§9.1 test-calls-solver-direct）---
 SOLVER_DIRECT_CALL_PATTERNS: list[tuple[re.Pattern, str]] = []
 SOLVER_TEST_WRAPPER_NAME = "solve_for_test"   # この名前を含む行は許可（ラッパー経由）
@@ -788,6 +825,8 @@ GATE_REGISTRY: list[tuple[str, str, str, str]] = [
      "feat: のテスト欠落警告（soft）"),
     ("commit-too-large", "§3.4 コミット時", "always", "コミット規模の警告（soft）"),
     ("test-shrink", "§3.4 コミット時", "var:TEST_PATH_PATTERNS", "既存テストの純減警告（soft・弱体化の可視化）"),
+    ("doc-impact-undeclared", "§3.4 コミット時", "var:DOC_IMPACT_RULES",
+     "利用者影響のあるソース変更に対応 doc の差分も DOCS-NOT-NEEDED 理由も無い警告（soft・列充填で有効化）"),
     # --- §5 CI（最終防衛線）---
     ("red-first", "§5 CI", "static:CI（required・列充填で単一テスト実行）",
      "fix 同梱テストが親コミットで赤だった（バグを再現した）ことの機械証明"),

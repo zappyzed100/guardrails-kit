@@ -24,7 +24,7 @@
 
 | 区分 | 行 |
 |---|---|
-| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
+| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／**ソース⇔doc 対応表（doc-impact-undeclared — §3.4 検査9・v2.63 soft 導入。既定3件は `repo_scan.py` の `DOC_IMPACT_RULES` にキット原本の実パスで同梱済み＝列は確認のみ、採用先固有の対応があれば加算追記。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
 | ランタイム（表D — §12） | `up`／`reset`（seed込み）／`seed`／`time`（時刻注入）／`db`（DB読み）／`e2e`／操作レール（実UI操作の手段）／観察レール（コンソール・ネットワーク・ログの読み方）／UIテストID検査（`ui-missing-testid`）／外部I/Oシームの置き場所 |
 | paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.py` DISPATCH／**`post_edit_lint.py` DISPATCH（v2.5導入・v2.24でPython化）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
 
@@ -38,6 +38,38 @@
 **正規表現で近似できない構文世代**（例: Next.js 15 の await params のような構文レベルの
 移行）**は列に入れない**——偽陽性 > 価値（§7.4「近似は仕様」の範囲を超えるものは対象外）。
 各パターンのラベルには**代替 API を必ず書く**（違反者がラベルだけで直せる形 — G4）。
+
+### 「ソース⇔doc 対応表」の出典規律（v2.63 — §3.4 検査9 doc-impact-undeclared の
+`DOC_IMPACT_RULES` を列で埋める時の正本）
+
+**グローバルな1本の対応（「scripts/ が変わったら README を触れ」）は禁止**——空白変更や
+句読点修正まで拾って儀式化し、doc 不要な内部修正のたびにノイズを増やす。必ず
+「このソース群が変わったら、この doc 群」という**ペア**で書く（1要素 =
+`{"source": [...], "docs": [...], "label": "..."}`）:
+
+1. **source は利用者・運用に影響し得る変更面に絞る**（インストーラ・設定テンプレート・
+   CI/CD・hook・公開 API・利用者向けコマンド）。内部実装の詳細だけが変わるファイルは
+   source に含めない——含めると soft が鳴りっぱなしになり無視される。
+2. **docs は実際にその変更の正本となる文書**（人間向け HTML・該当する契約 Markdown）を
+   指す。「とりあえず何かの doc」ではなく、読めば答えが載っている文書を指す。
+3. **label には対応の意味を1行で書く**（違反者がラベルだけで「何を更新すればよいか」
+   判断できる形 — G4。deprecated-api の代替 API 表記と同じ規律）。
+
+免除は `DOCS-NOT-NEEDED: 理由` をコミット本文に書く（存在検査のみ・理由の妥当性は
+検証しない — NO-LOG / RED-FIRST-EXEMPT と同じ境界）。空文字・定型文だけの理由も
+機械上は通るため、免除の乱用は §3.6 の違反ログで事後に確認する運用とする
+（RED-FIRST-EXEMPT の乱用点検と同じ経路 — 保留台帳参照）。
+
+**既定3件（キット共通の導入・更新手順向け）は空で出荷しない**——`DEPENDENCY_MANIFESTS` と
+同じ扱い（列は確認のみ、独自の対応があれば `+=` で加算追記）。理由: `PLAN_LAYER_ROOTS`
+（採用先アプリの src レイヤー）と違い、この3件が指す対応（インストーラ・列充填の仕組み・
+フック/CI配線 → `README_SETUP.html`／`.guardrails/GUARDRAILS.md`／`bindings/catalog.md`）
+はキットを敷いたどのリポジトリにも共通する構造だから。ただし `README_SETUP.html` は
+`install_kit.py` の META_FILES で導入先に配置されない——`check_doc_impact()` は `docs`
+側のパターンに一致する追跡ファイルがそのリポジトリに1つも無いルールを自動的に不発にする
+ため、導入先で「絶対に満たせない SOFT」にはならない（新しい列を起こす際にこの安全弁を
+再実装しなくてよい——判定は `check_commit_msg.py` 側の共通ロジック）。採用先固有の対応
+（自分のアプリの利用者向け文書と実装の対）は独自に `+=` する。
 
 ### 関数複雑度ゲートの対応表（v2.18 — 調査④。Step 6 の lint 昇格時に有効化を推奨）
 

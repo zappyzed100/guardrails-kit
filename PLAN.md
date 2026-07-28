@@ -102,6 +102,7 @@ scripts/install_kit.py         対象リポジトリへ配置（INSTALLED/MERGED
 - [x] workflow自己改変防御（guardrails-trusted.yml＋check_workflow_integrity.py）
 - [x] required check同名job偽装の封鎖（.github/CODEOWNERS＋code owner review必須化）
 - [x] 配布元CODEOWNERSと導入先テンプレートの分離・外部ActionのコミットSHA固定
+- [x] doc更新漏れの検出 `doc-impact-undeclared`（soft導入・列充填・DOC_IMPACT_RULES）
 - [ ] 初回gitタグの切り出しとRelease公開 `next`
 - [ ] 免除・接頭辞（RED-FIRST-EXEMPT等）の乱用点検指標スクリプト `backlog`
 - [ ] 効果の評価設計（hard違反率・soft無視率・免除率・fix再発率の計測） `backlog`
