@@ -645,16 +645,25 @@ Step 1 を未来永劫実行しない（実体化は導入先の仕事——原�
   あった空白（調査④ Clean Room QA の脅威モデル）。正当な整理が普通に存在するため soft——
   警告の常態化は保留「Clean Room 隔離テスト」のトリガー実測に当たる。
 
-- **検査9（doc-impact-undeclared — v2.63・Phase 64・soft・列充填で有効化——
-  `DOC_IMPACT_RULES` が空なら不発）**: 利用者・運用に影響し得るソース変更（対応表の
-  `source` 側）があるのに、対応する人間向け文書（`docs` 側）の差分が同コミットに無ければ
-  `SOFT:doc-impact-undeclared` を警告して通す。本文に `DOCS-NOT-NEEDED: 理由` があれば
-  免除（存在検査のみ・理由の妥当性は検証しない）。グローバルな「このフォルダが変わったら
-  何か doc を触れ」ではなく `source`→`docs` の**対**で判定するため、無関係な doc を
-  1文字触るだけで通す抜け道を作らない（出典規律は bindings/catalog.md）。doc 更新そのものを
-  機械に推測させるのではなく、**doc 影響の判断を無言で済ませない**ことが目的（G9「沈黙の
-  禁止」）——feat-without-plan と同じ「偽陽性率が未知の検査は soft で数タスク実測してから
-  hard 昇格」の経路を踏む（.guardrails/GOALS.md 運用ルール）。設計判断は
+- **検査9（doc-impact-undeclared — v2.63・Phase 64・soft）**: 利用者・運用に影響し得る
+  ソース変更（対応表の `source` 側）があるのに、対応する人間向け文書（`docs` 側）の
+  差分が同コミットに無ければ `SOFT:doc-impact-undeclared` を警告して通す。本文に
+  `DOCS-NOT-NEEDED: 理由` があれば免除（存在検査のみ・理由の妥当性は検証しない）。
+  グローバルな「このフォルダが変わったら何か doc を触れ」ではなく `source`→`docs` の
+  **対**で判定するため、無関係な doc を1文字触るだけで通す抜け道を作らない（出典規律は
+  bindings/catalog.md）。既定値（`DOC_IMPACT_RULES`）はキット原本の実パス
+  （`scripts/install_kit.py`・`PROMPT_*`・`scripts/fill_bindings.py` 系・
+  `.claude/hooks/` `.codex/hooks/` `.pre-commit-config.yaml` `.github/workflows/` →
+  `README_SETUP.html` / `.guardrails/GUARDRAILS.md` / `bindings/catalog.md`）で
+  **充填済みで出荷**する——他の列充填変数（`PLAN_LAYER_ROOTS` 等）と違い空で出荷しない
+  理由は、この3件がいずれも「キットの導入・更新手順」という**導入先を問わず共通の構造**
+  だから。docs 側がそのリポジトリに1件も追跡されていないルールは自動不発にし
+  （`check_commit_msg.check_doc_impact()`）、`README_SETUP.html` のように
+  `install_kit.py` の META_FILES で導入先へ配置されないファイルへ向けたルールが導入先で
+  「絶対に満たせない SOFT」として鳴り続けることを防ぐ。doc 更新そのものを機械に推測させる
+  のではなく、**doc 影響の判断を無言で済ませない**ことが目的（G9「沈黙の禁止」）——
+  hard にしない理由は feat-without-plan と同じ「偽陽性率が未知の検査は soft で数タスク
+  実測してから hard 昇格」（.guardrails/GOALS.md 運用ルール）。設計判断は
   docs/plans/2026-07-28-doc-impact-check.md。
 
 ### commit-msg 系ゲートの CI 実効化 ✅（v2.30・G9・Phase 37）
@@ -2406,10 +2415,23 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 - 検討過程で2案が出た: ①「変更領域→対応文書」を1本のグローバル正規表現対で判定する案、
   ②領域ごとに個別の対応（source パターン群→docs パターン群）を列で持つ案。①は実装が
   軽いが、無関係な doc を1文字触るだけで通る／doc 不要な内部修正のたびに鳴るというノイズ
-  源になる。②を採用し、対応表を `DOC_IMPACT_RULES`（`bindings/catalog.md` 列充填・空なら
-  不発）として持たせた——feat-without-plan（Phase 17/19）が `PLAN_LAYER_ROOTS` を列充填に
-  したのと同じ理由（対応表はプロジェクトごとに違う・キット本体にハードコードすると
-  移植時に「絶対に発火しない検査」になる）。
+  源になる。②を採用し、対応表を `DOC_IMPACT_RULES` として持たせた——feat-without-plan
+  （Phase 17/19）が `PLAN_LAYER_ROOTS` を列充填にしたのと同じ理由（対応表はプロジェクト
+  ごとに違う・キット本体にハードコードすると移植時に「絶対に発火しない検査」になる）。
+- 実装直後の再検討で既定値の扱いを修正: 初版は `PLAN_LAYER_ROOTS` に倣い
+  `DOC_IMPACT_RULES` を空で出荷したが、それだと**このリポジトリ自身でも不発のまま**——
+  「doc更新漏れを検出したい」という元の要求に対して検査が実質何もしない状態になる。
+  再検討の結果、この対応表の中身（導入・更新手順／列充填の仕組み／フック・CI配線→
+  `README_SETUP.html` 等）は`PLAN_LAYER_ROOTS`が指す対象（採用先アプリの src レイヤー）
+  とは性質が違い、**キットを敷いたどのリポジトリにも共通する構造**だと判断し、キット原本
+  の実パスで**充填済みとして出荷**するよう変更した。ただし `README_SETUP.html` は
+  `install_kit.py` の META_FILES であり導入先には配置されない——このまま無条件に出荷すると
+  導入先で「絶対に満たせない SOFT」になる。これを防ぐため `check_doc_impact()` に
+  「`docs` 側のどのパターンにも一致する追跡ファイルがそのリポジトリに1つも無ければ、
+  そのルールを不発にする」存在ガードを追加した（`rs.list_tracked_files()` で判定）。
+  結果として、原本ではルールが生きた状態で機能し、`README_SETUP.html` を持たない導入先
+  では該当ルールだけが自動的に不適用になる——列を空にする（何もしない）でも、原本専用の
+  ハードコード（導入先で誤発火）でもない第三の形。
 - 免除は他の存在検査（`NO-LOG:` / `RED-FIRST-EXEMPT:` / `NONDETERMINISM-EXEMPT:`）と同じ
   境界: `DOCS-NOT-NEEDED: 理由` の**存在のみ**を検査し、理由の妥当性は検査しない。
   乱用監視は既存の保留「免除・接頭辞の乱用点検指標」（下記）に合流させる——専用の監視は
