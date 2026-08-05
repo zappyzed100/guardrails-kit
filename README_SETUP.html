@@ -138,6 +138,45 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 </tr>
 </tbody>
 </table>
+<h2 id="v266-scan-guardrailsgoalsmd-g9g7g13">v2.66 での変更点（走査型テストの空定義域検出を追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G7/G13）</h2>
+<ul>
+<li>soft <code>scan-without-floor</code> を追加した（列充填——4同梱列に既定値を定義して出荷）。
+  テストファイル内にディレクトリ走査呼び出しがあるのに、件数下限/実測ピンとみなせる assert も
+  <code>SCAN-FLOOR-EXEMPT: 理由</code> も無い状態を警告する。採用先実測で fixture 走査テストが
+  CWD 解決ミスにより恒久0件走査＝空虚に合格し続けた「空集合の上の緑」への対策——
+  <code>binding-dead-pattern</code>/<code>binding-dead-path</code> が守るバインディング定義域の外
+  （テストコード自身の走査ループ）を塞ぐ。実測件数の等値ピンが上位互換（強制せず推奨）。</li>
+<li>4列（ts-react-web@14 / python-uv@12 / dart-flutter@10 / rust@11）へ paste-block と
+  違反注入コーパス1ケースずつ（<code>requires</code> 付き）を追加し、fill 一時適用で全列
+  DOD:PASS・抑制2型（下限あり/免除あり→沈黙）を実測した。詳細は .guardrails/GUARDRAILS.md
+  Phase 67、設計判断は docs/plans/2026-08-05-scan-floor-assert.md。</li>
+</ul>
+<h2 id="v265-soft-guardrailsgoalsmd-g9g4g2">v2.65 での変更点（soft警告の規則ID別ラチェットを追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G2）</h2>
+<ul>
+<li>soft <code>soft-ratchet-exceeded</code> / <code>soft-ratchet-unbaselined</code> を追加した。
+  追跡ファイル <code>.guardrails/soft_baseline.json</code>（生成・更新は新動詞
+  <code>dev.py ratchet</code> が唯一の主体）に規則IDごとの許容件数を持ち、超過を
+  <code>m→n 件に増加</code> の差分形式で警告する。採用先実測で soft 警告164件が正常化ノイズと
+  化した「総量の漸増」経路を CI でも見える形で塞ぐ——<code>chronic-soft-violation</code>
+  （同一箇所×ローカル台帳）と直交する第2軸。意図的な増加はベースライン引き上げの差分を
+  同一コミットに同梱して通す（守りが緩む方向の変更を diff に可視化）。</li>
+<li>ベースラインはリポジトリ固有の実測値のため導入先には配布しない（install_kit.py の
+  META_FILES へ追加——導入先は unbaselined の警告から <code>ratchet</code> 実行が正規経路）。
+  soft 導入の判断（運用摩擦が未実測）・DoD（コーパス1ケース＋手動注入4型）は
+  .guardrails/GUARDRAILS.md Phase 66 に記録。設計判断は docs/plans/2026-08-05-soft-ratchet.md。</li>
+</ul>
+<h2 id="v264-severity-guardrailsgoalsmd-g9g4g5">v2.64 での変更点（台帳severity宣言と実装の双方向照合を追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G5）</h2>
+<ul>
+<li>hard <code>gates-severity-drift</code> を追加した。<code>GATE_REGISTRY</code>（scripts/repo_scan.py）を
+  5タプル化して severity 宣言列（<code>HARD</code>/<code>SOFT</code>/<code>HARD→SOFT</code>/<code>-</code>）を持たせ、
+  検査器2本（check_structure / check_commit_msg）の実 emit と双方向照合する。従来 severity は
+  台帳の説明文中の「(soft)」という照合されない散文であり、採用先実測で露出した「散文の
+  契約主張と実装の乖離」の同型がキット自身の台帳に残っていた。<code>dev.py gates</code> の
+  一覧にも severity 列を表示する。</li>
+<li>§3.3 の規則追加レシピへ「判定列が書ける契約主張は散文でなく台帳の構造化列へ昇格させる」を
+  追記した。設計判断は docs/plans/2026-08-05-gate-severity-contract.md、DoD（宣言反転2型の
+  注入→発火→除去→沈黙）は .guardrails/GUARDRAILS.md Phase 65 に記録。</li>
+</ul>
 <h2 id="v262-htmlhtml-guardrailsgoalsmd-g3">v2.62 での変更点（人間向け文書のHTML化規約を追加し、本書自体をHTML化。根拠は <code>.guardrails/GOALS.md</code> の G3、機械検査は追加せず）</h2>
 <ul>
 <li><strong>文書の書式規約を新設</strong>（AGENTS.md §4・.guardrails/GUARDRAILS.md §6）: 人間だけが読む文書

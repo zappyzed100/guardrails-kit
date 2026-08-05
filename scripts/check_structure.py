@@ -133,10 +133,48 @@ def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
                                     f"{label}。テストは {rs.SOLVER_TEST_WRAPPER_NAME} 経由のみ（§9.1）"))
 
 
+def check_scan_floor(texts: dict[str, str], out: list[Finding]) -> None:
+    """走査型テストの件数下限（soft `scan-without-floor` — Phase 67・v2.66・§3.3）。
+
+    採用先実測: fixture 走査テストが CWD 解決ミスで恒久的に0ファイル走査＝空虚に合格し、
+    走査を直した瞬間に16件の登録漏れが噴出した——「空集合の上の緑」。バインディング変数の
+    定義域空化は binding-dead-pattern / binding-dead-path が守るが、テストコード自身の
+    走査ループは未被覆だった同族の fail-open（G9）。心得の記録では再発を防げなかったため
+    門へ昇格（設計判断は docs/plans/2026-08-05-scan-floor-assert.md）。
+
+    判定はファイル単位・警告は最初の走査呼び出し行に1件のみ（G4 の1違反1行と、同一
+    ファイル内の複数走査で鳴りすぎない折衷）。floor は「件数下限か実測ピンとみなせる
+    assert がファイル内のどこかにある」の存在検査のみ——質は検査しない。
+    """
+    if not rs.SCAN_CALL_PATTERNS:
+        return
+    for rel, text in texts.items():
+        if not rs.is_test_file(rel):
+            continue
+        ext = rs.ext_of(rel)
+        pats = rs.SCAN_CALL_PATTERNS.get(ext)
+        if not pats:
+            continue
+        if rs.SCAN_FLOOR_EXEMPT_PATTERN.search(text):
+            continue
+        if any(p.search(text) for p in rs.SCAN_FLOOR_PATTERNS.get(ext, [])):
+            continue
+        for i, line in _iter_code_lines(ext, text):
+            label = next((lb for pat, lb in pats if pat.search(line)), None)
+            if label:
+                out.append(("SOFT", "scan-without-floor", f"{rel}:{i}",
+                            f"走査呼び出し（{label}）があるのに件数下限の assert が同一ファイル"
+                            "に無い——走査対象が空集合になっても緑のまま（0件走査の空虚な合格）。"
+                            "実測件数の等値ピンか下限 assert を足す"
+                            "（免除は `SCAN-FLOOR-EXEMPT: 理由` — §3.3）"))
+                break  # ファイル単位で1警告
+
+
+# 捕捉は (severity, 規則ID) の対（v2.64・Phase 65——ID だけでなく severity も照合する）
 _GATE_EMIT_PATTERNS = [
-    re.compile(r'\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
-    re.compile(r'_emit\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),  # check_commit_msg の _emit 形
-    re.compile(r'"(?:HARD|SOFT):([a-z0-9-]+)'),           # 文字列直書き形（履歴再実行等）
+    re.compile(r'\("(HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
+    re.compile(r'_emit\("(HARD|SOFT)",\s*"([a-z0-9-]+)"'),  # check_commit_msg の _emit 形
+    re.compile(r'"(HARD|SOFT):([a-z0-9-]+)'),           # 文字列直書き形（履歴再実行等）
 ]
 _GATE_SOURCE_FILES = ["scripts/check_structure.py", "scripts/check_commit_msg.py",
                       "scripts/repo_scan.py"]
@@ -144,11 +182,20 @@ _GATE_SOURCE_FILES = ["scripts/check_structure.py", "scripts/check_commit_msg.py
 
 def check_gates_registry(root: Path, out: list[Finding]) -> None:
     """門の台帳（GATE_REGISTRY — §12.1 `dev.py gates`）と検査器コードの一致検査
-    （gates-registry-drift・hard — Phase 45・v2.43）。
+    （gates-registry-drift・hard — Phase 45・v2.43／gates-severity-drift・hard —
+    Phase 65・v2.64）。
 
     台帳は「何ができるか」の発見導線であり、検査器と食い違えば一覧が嘘をつく（G9）。
-    照合は2方向: ① 検査器が emit する規則ID（リテラル）が台帳に無い→未登録
+    ID の照合は2方向: ① 検査器が emit する規則ID（リテラル）が台帳に無い→未登録
     ② 台帳の強制対象区分（GATE_REGISTRY_ENFORCED）のIDがどのソースにも現れない→台帳が古い。
+
+    severity の照合（Phase 65——「(soft)」の散文宣言を構造化列へ昇格した相方）:
+    宣言 "-" なのに emit がある／emit された severity が宣言に無い／宣言した severity の
+    emit が（他の severity の emit はあるのに）見つからない、の3型を検出する。
+    **境界**: 変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由の
+    agents-import-missing 等）はリテラル捕捉に掛からない——captured が空集合の行は
+    severity 照合をスキップする（ID 存在は上記②が別途守る。散文主張の真偽一般は §2e の
+    境界どおり対象外——照合できるのは判定列が書ける severity のみ）。
     """
     sources: dict[str, str] = {}
     for rel in _GATE_SOURCE_FILES:
@@ -156,11 +203,13 @@ def check_gates_registry(root: Path, out: list[Finding]) -> None:
             sources[rel] = rs.read_text(root, rel)
         except OSError:
             return  # ソース欠落は missing-required の持ち場（二重報告しない — G4）
-    emitted: set[str] = set()
+    pairs: dict[str, set[str]] = {}   # 規則ID → 実装が emit する severity 集合
     for rel in ("scripts/check_structure.py", "scripts/check_commit_msg.py"):
         for pat in _GATE_EMIT_PATTERNS:
-            emitted |= set(pat.findall(sources[rel]))
-    registry_ids = {gid for gid, _, _, _ in rs.GATE_REGISTRY}
+            for sev, gid in pat.findall(sources[rel]):
+                pairs.setdefault(gid, set()).add(sev)
+    emitted = set(pairs)
+    registry_ids = {gid for gid, _, _, _, _ in rs.GATE_REGISTRY}
     for gid in sorted(emitted - registry_ids):
         out.append(("HARD", "gates-registry-drift", gid,
                     "検査器が emit する規則IDが GATE_REGISTRY に未登録"
@@ -169,13 +218,30 @@ def check_gates_registry(root: Path, out: list[Finding]) -> None:
     # 「台帳にだけ書いた幽霊規則」と区別できない——**2回以上**（台帳の行＋実装側の実体）を
     # 要求する（自己循環の除去。Phase 45 の違反注入で実測した穴）。
     union = "\n".join(sources.values())
-    for gid, cat, _act, _desc in rs.GATE_REGISTRY:
-        if cat.split(" ", 1)[0] not in rs.GATE_REGISTRY_ENFORCED:
+    for gid, cat, _act, declared, _desc in rs.GATE_REGISTRY:
+        if cat.split(" ", 1)[0] in rs.GATE_REGISTRY_ENFORCED:
+            if gid not in emitted and union.count(gid) < 2:
+                out.append(("HARD", "gates-registry-drift", gid,
+                            "GATE_REGISTRY にあるが検査器コードのどこにも現れない"
+                            "（規則を消したなら台帳からも消す — §12.1 gates）"))
+        captured = pairs.get(gid, set())
+        if declared == "-":
+            if captured:
+                out.append(("HARD", "gates-severity-drift", gid,
+                            f"台帳は非emit（-）宣言だが実装が {'/'.join(sorted(captured))} で"
+                            " emit している（台帳の severity 宣言を実装に合わせる — §3.3）"))
             continue
-        if gid not in emitted and union.count(gid) < 2:
-            out.append(("HARD", "gates-registry-drift", gid,
-                        "GATE_REGISTRY にあるが検査器コードのどこにも現れない"
-                        "（規則を消したなら台帳からも消す — §12.1 gates）"))
+        if not captured:
+            continue  # 変数ID emit は捕捉不能（docstring の境界）
+        declared_set = set(declared.split("→"))
+        for sev in sorted(captured - declared_set):
+            out.append(("HARD", "gates-severity-drift", gid,
+                        f"実装が {sev} で emit しているが台帳の宣言（{declared}）に無い"
+                        "（宣言か実装のどちらかが嘘——一致させる — §3.3）"))
+        for sev in sorted(declared_set - captured):
+            out.append(("HARD", "gates-severity-drift", gid,
+                        f"台帳は {declared} 宣言だが {sev} の emit が実装に見つからない"
+                        "（宣言か実装のどちらかが嘘——一致させる — §3.3）"))
 
 
 def check_phase_table(root: Path, out: list[Finding]) -> None:
@@ -492,6 +558,8 @@ def check_binding_dead_patterns(out: list[Finding]) -> None:
     for name, table in (("SLEEP_PATTERNS", rs.SLEEP_PATTERNS),
                         ("NONDETERMINISM_PATTERNS", rs.NONDETERMINISM_PATTERNS),
                         ("TEST_NETWORK_PATTERNS", rs.TEST_NETWORK_PATTERNS),
+                        ("SCAN_CALL_PATTERNS", rs.SCAN_CALL_PATTERNS),
+                        ("SCAN_FLOOR_PATTERNS", rs.SCAN_FLOOR_PATTERNS),
                         ("DEPRECATED_PATTERNS", rs.DEPRECATED_PATTERNS),
                         ("PRINT_CALL_PATTERNS", rs.PRINT_CALL_PATTERNS),
                         ("INLINE_TEST_PATTERNS", rs.INLINE_TEST_PATTERNS)):
@@ -717,9 +785,65 @@ def check_orphans(root: Path, files: list[str], texts: dict[str, str], out: list
                             "どこからも import / mod されていない孤立ファイル"))
 
 
-def main() -> int:
-    rs.reconfigure_stdio()
-    root = rs.repo_root()
+def check_soft_ratchet(root: Path, tracked: set[str], out: list[Finding]) -> None:
+    """soft 警告の規則ID別ラチェット（soft `soft-ratchet-exceeded` — Phase 66・v2.65）。
+
+    soft の設計前提「1回の見送りは可・放置は歯止めが塞ぐ」のうち、既存の歯止め
+    `chronic-soft-violation` は同一箇所×ローカル台帳（CI・新規 clone では不発）。
+    こちらは**規則IDごとの総量**を git 追跡のベースライン（`SOFT_BASELINE_REL`——
+    生成・更新は `dev.py ratchet` が唯一の主体）と比較し、1件ずつの漸増が正常化する
+    経路（採用先実測: soft 164件のノイズ化）を CI でも見える形で塞ぐ——直交する2軸
+    （箇所の慢性化×総量の漸増）であり重複登録ではない（G5）。
+
+    意図的な増加は `dev.py ratchet` による引き上げを**同一コミットに同梱**して通す——
+    守りが緩む方向の変更を diff とレビューに可視化する（GOALS「降格の統治」と同じ
+    非対称）。グローバル総量上限にしない理由: 領域を跨いだ相殺（ある規則の解消が別の
+    規則の増加を隠す）を許すため（設計判断は docs/plans/2026-08-05-soft-ratchet.md）。
+
+    呼び出し順の契約: **全 soft 検査の後**（`out` が当回の全 soft findings を持つ——
+    chronic-soft-violation と同じく main()/collect_findings() が順序を保証する）。
+    ラチェット自身の警告は集計から除外する（SOFT_RATCHET_SELF——自己参照の禁止）。
+    """
+    counts: dict[str, int] = {}
+    for sev, rule, *_ in out:
+        if sev == "SOFT" and rule not in rs.SOFT_RATCHET_SELF:
+            counts[rule] = counts.get(rule, 0) + 1
+    if rs.SOFT_BASELINE_REL not in tracked:
+        out.append(("SOFT", "soft-ratchet-unbaselined", rs.SOFT_BASELINE_REL,
+                    "soft警告のベースラインが未生成（`uv run scripts/dev.py ratchet` で生成し"
+                    "追跡する——binding-unstamped と同じ「見える猶予」・不発を静かにしない — §3.3）"))
+        return
+    try:
+        baseline = json.loads(rs.read_text(root, rs.SOFT_BASELINE_REL))
+        if not isinstance(baseline, dict):
+            raise ValueError("top-level が dict でない")
+    except (OSError, ValueError):
+        out.append(("SOFT", "soft-ratchet-unbaselined", rs.SOFT_BASELINE_REL,
+                    "ベースラインが読めない/解釈不能（`uv run scripts/dev.py ratchet` で"
+                    "再生成する——壊れた台帳での静かな不発にしない — §3.3・G9）"))
+        return
+    for rule in sorted(set(counts) | set(baseline)):
+        try:
+            allowed = int(baseline.get(rule, 0))
+        except (TypeError, ValueError):
+            allowed = 0
+        n = counts.get(rule, 0)
+        if n > allowed:
+            out.append(("SOFT", "soft-ratchet-exceeded", rule,
+                        f"soft警告が {allowed}→{n} 件に増加（ベースライン超過）。違反を解消"
+                        "するか、意図的な増加なら同一コミットで `dev.py ratchet` の差分を"
+                        "同梱して理由を残す（§3.3）"))
+        elif n < allowed:
+            # 違反ではないため finding にしない（減少は良い方向）。ただし黙らない——
+            # ベースラインの引き下げ忘れは次の増加を隠す余白になる（G9）。
+            print(f"[soft-ratchet] {rule}: {allowed}→{n} 件に減少——"
+                  "`uv run scripts/dev.py ratchet` でベースラインを引き下げる（§3.3）",
+                  file=sys.stderr)
+
+
+def collect_findings(root: Path) -> list[Finding]:
+    """全検査を実行して findings を返す（main と `dev.py ratchet` の共通土台 — Phase 66。
+    違反ログへの記録・exit 判定は main の責務——ここは収集のみ）。"""
     files = rs.list_tracked_files(root)
     tracked = set(files)
 
@@ -737,6 +861,7 @@ def main() -> int:
     check_layers(texts, findings)
     check_required_content(root, files, texts, findings)
     check_tests(texts, findings)
+    check_scan_floor(texts, findings)
     check_property_tests(texts, findings)
     check_gates_registry(root, findings)
     check_phase_table(root, findings)
@@ -757,6 +882,14 @@ def main() -> int:
     check_soft_limits(files, texts, findings)
     check_chronic_soft_violations(root, findings)
     check_orphans(root, files, texts, findings)
+    check_soft_ratchet(root, tracked, findings)   # 全 soft の後（docstring の順序契約）
+    return findings
+
+
+def main() -> int:
+    rs.reconfigure_stdio()
+    root = rs.repo_root()
+    findings = collect_findings(root)
 
     for sev, rule, loc, msg in findings:
         print(f"{sev}:{rule} {loc} {msg}", file=sys.stderr)

@@ -596,6 +596,20 @@ NONDETERMINISM_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 # --- テスト内 外部I/O（§9.5 test-network: 外部I/Oの検疫。列充填）---
 TEST_NETWORK_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 
+# --- 走査型テストの件数下限（§3.3 scan-without-floor — v2.66・Phase 67・soft。列充填）---
+# 「空集合の上の緑」（走査対象が0件になってもテストが空虚に合格し続ける）の検出。
+# テストファイル内にディレクトリ走査呼び出し（SCAN_CALL_PATTERNS——キー=拡張子）があるのに、
+# 件数下限/実測ピンとみなせる assert（SCAN_FLOOR_PATTERNS）も `SCAN-FLOOR-EXEMPT: 理由`
+# コメントも**同一ファイル内**に無ければ soft 警告する（判定はファイル単位——行近傍への
+# 厳密化は採用先の偽陽性実測後 — §7.4 の近似の流儀）。binding-dead-pattern / binding-dead-path
+# がバインディング変数の定義域空化を守るのに対し、こちらはテストコード自身の走査ループの
+# 定義域を守る（G9）。下限が守るのは「0件で緑にならない」まで——「意図した部分集合を走査
+# しているか」は判定不能で、実測件数の等値ピン留めが上位互換（カタログ注記で推奨。
+# 免除は存在検査のみ・理由の妥当性は検査しない——NO-LOG: と同じ境界）。
+SCAN_CALL_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
+SCAN_FLOOR_PATTERNS: dict[str, list[re.Pattern]] = {}
+SCAN_FLOOR_EXEMPT_PATTERN = re.compile(r"SCAN-FLOOR-EXEMPT:\s*\S")
+
 # --- 非決定性テストの免除（test-sleep/test-nondeterminism/test-network 共通 —
 # §9.5・v2.25・Phase 35）---
 # 非決定性の再現そのものがテストの本質という正当なケースがある（例: 実ブラウザが
@@ -726,6 +740,15 @@ REQUIRED_SOFT_PATHS: list[str] = []
 CHRONIC_SOFT_RULES = frozenset({"file-too-long", "dir-too-crowded"})
 CHRONIC_SOFT_THRESHOLD = 5
 
+# --- soft 警告の規則ID別ラチェット（§3.3 soft-ratchet-exceeded — v2.65・Phase 66）---
+# chronic-soft-violation が「同一箇所の慢性化」をローカル台帳で見るのに対し、こちらは
+# 「規則IDごとの総量の漸増」を git 追跡のベースラインで見る（CI・新規 clone でも効く）。
+# ベースラインの生成・更新は `dev.py ratchet` が唯一の主体（手編集しない——
+# generate_structure.py と同型の「生成物だが追跡する」運用）。ラチェット自身の警告は
+# 集計から除外する（自己参照の禁止）。
+SOFT_BASELINE_REL = ".guardrails/soft_baseline.json"
+SOFT_RATCHET_SELF = frozenset({"soft-ratchet-exceeded", "soft-ratchet-unbaselined"})
+
 # --- シンボル抽出の言語ディスパッチ（表A: 公開シンボル抽出。列充填。実装は中盤）---
 # 例: {".dart": _dart_public_symbols, ".rs": _rust_public_symbols,
 #      ".ts": _ts_public_symbols, ".tsx": _ts_public_symbols, ".py": _py_public_symbols}
@@ -751,108 +774,126 @@ BINDING_STAMP_FILES = [
 # CUSTOMIZE.md 導線と同型）。手書き文書との二重正本にしないため、検査器が実際に emit
 # する規則IDとの一致を check_structure の `gates-registry-drift`（hard）が機械検査する
 # ——台帳に無い規則を emit したら赤、emit されない規則が台帳に残っても赤。
-# 行 = (識別子, 区分（正本節）, 有効化, 一行説明)。有効化の書式:
+# 行 = (識別子, 区分（正本節）, 有効化, severity宣言, 一行説明)。有効化の書式:
 #   "always"        = 言語なしで常時有効
 #   "var:NAME"      = repo_scan の同名バインディングが充填されて初めて発火（空なら不発）
 #   "vars:A|B"      = いずれかの充填で発火
 #   "hook:名前"     = .claude/settings.json にそのフックが配線されていれば有効
 #   "static:ラベル" = 状態を計算せずラベルをそのまま表示（CI・キット原本限定 等）
-GATE_REGISTRY: list[tuple[str, str, str, str]] = [
+# severity宣言の書式（v2.64・Phase 65——散文「(soft)」を構造化列へ昇格。宣言と実装の
+# 一致は check_structure の `gates-severity-drift`（hard）が機械検査する）:
+#   "HARD" / "SOFT" = 検査器（check_structure / check_commit_msg）がその severity で emit
+#   "HARD→SOFT"     = 降格パスを持つ（例: kit-source-exempt で SOFT へ降格——両方の emit を許す）
+#   "-"             = 2検査器から emit しない行（フック・CI・道具類。severity 照合の対象外）
+GATE_REGISTRY: list[tuple[str, str, str, str, str]] = [
     # --- §1 編集直後（フック層）---
-    ("post-edit-format", "§1 編集直後", "hook:post_edit_format.py",
+    ("post-edit-format", "§1 編集直後", "hook:post_edit_format.py", "-",
      "編集直後の自動整形（第1段。対象拡張子は列充填の DISPATCH）"),
-    ("post-edit-lint", "§1 編集直後", "hook:post_edit_lint.py",
+    ("post-edit-lint", "§1 編集直後", "hook:post_edit_lint.py", "-",
      "編集直後の単一ファイル lint（第2段・exit 2 で自己修正を要求）"),
     # --- §2 操作直前（フック層）---
-    ("guard-git-bypass", "§2 操作直前", "hook:guard_git_bypass.py",
+    ("guard-git-bypass", "§2 操作直前", "hook:guard_git_bypass.py", "-",
      "--no-verify / force push / hooksPath 付け替え / pre-commit uninstall の技術的ブロック"),
-    ("work-loss-guard", "§2 操作直前", "hook:guard_git_bypass.py",
+    ("work-loss-guard", "§2 操作直前", "hook:guard_git_bypass.py", "-",
      "非可逆な作業消失（rm -rf .git・dirty での reset --hard 等）のブロック"),
-    ("ownership-guard", "§2c 編集直前", "hook:guard_human_wip.py",
+    ("ownership-guard", "§2c 編集直前", "hook:guard_human_wip.py", "-",
      "人間の未コミット変更への AI の Edit/Write をブロック（commit/stash で自動解除）"),
-    ("stop-gate", "§2b ターン終了", "hook:stop_incomplete_guard.py",
+    ("stop-gate", "§2b ターン終了", "hook:stop_incomplete_guard.py", "-",
      "未コミット作業・検査赤のままの「完了しました」を差し戻し"),
     # --- §3.3 構造検査（pre-commit・hard）---
-    ("missing-required", "§3.3 コミット時", "always", "必須ファイル・防壁の実体の欠落検出"),
-    ("agents-import-missing", "§3.3 コミット時", "always", "CLAUDE.md の @AGENTS.md インポート欠落"),
-    ("mcp-not-allowed", "§3.3 コミット時", "always", "MCP 許可リスト外の常駐サーバー検出"),
-    ("mcp-unparseable", "§3.3 コミット時", "always", ".mcp.json が解釈不能（soft）"),
-    ("env-file-tracked", "§3.3 コミット時", "always", "実値の入り得る .env 系の追跡拒否"),
-    ("layer-violation", "§3.3 コミット時", "var:LAYER_FORBIDDEN_IMPORTS", "レイヤー逆流 import の検出"),
-    ("test-sleep", "§3.3 コミット時", "var:SLEEP_PATTERNS", "テスト内 sleep（flaky の温床）の検出"),
-    ("test-nondeterminism", "§3.3 コミット時", "var:NONDETERMINISM_PATTERNS", "テスト内の時刻・seed なし乱数の検出"),
-    ("test-network", "§3.3 コミット時", "var:TEST_NETWORK_PATTERNS", "テスト内の外部 I/O 直呼びの検出"),
-    ("test-calls-solver-direct", "§3.3 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS",
+    ("missing-required", "§3.3 コミット時", "always", "HARD→SOFT", "必須ファイル・防壁の実体の欠落検出"),
+    ("agents-import-missing", "§3.3 コミット時", "always", "HARD→SOFT",
+     "CLAUDE.md の @AGENTS.md インポート欠落"),
+    ("mcp-not-allowed", "§3.3 コミット時", "always", "HARD", "MCP 許可リスト外の常駐サーバー検出"),
+    ("mcp-unparseable", "§3.3 コミット時", "always", "SOFT", ".mcp.json が解釈不能（soft）"),
+    ("env-file-tracked", "§3.3 コミット時", "always", "HARD", "実値の入り得る .env 系の追跡拒否"),
+    ("layer-violation", "§3.3 コミット時", "var:LAYER_FORBIDDEN_IMPORTS", "HARD", "レイヤー逆流 import の検出"),
+    ("test-sleep", "§3.3 コミット時", "var:SLEEP_PATTERNS", "HARD", "テスト内 sleep（flaky の温床）の検出"),
+    ("test-nondeterminism", "§3.3 コミット時", "var:NONDETERMINISM_PATTERNS", "HARD",
+     "テスト内の時刻・seed なし乱数の検出"),
+    ("test-network", "§3.3 コミット時", "var:TEST_NETWORK_PATTERNS", "HARD", "テスト内の外部 I/O 直呼びの検出"),
+    ("scan-without-floor", "§3.3 コミット時", "var:SCAN_CALL_PATTERNS", "SOFT",
+     "走査型テストに件数下限 assert が無い——「空集合の上の緑」の検出（soft）"),
+    ("test-calls-solver-direct", "§3.3 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS", "HARD",
      "ソルバー直呼びテストの拒否（solve_for_test 経由のみ — §9.1）"),
-    ("missing-property-test", "§9.6 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS",
+    ("missing-property-test", "§9.6 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS", "SOFT",
      "確率的コンポーネント有なのに性質形テストが無い（soft・オラクル契約）"),
-    ("log-direct-call", "§8.2 コミット時", "var:PRINT_CALL_PATTERNS", "単一出口以外での print 系直呼びの検出"),
-    ("missing-log-coverage", "§8.4 コミット時", "var:LOG_BOUNDARY_PATTERNS",
+    ("log-direct-call", "§8.2 コミット時", "var:PRINT_CALL_PATTERNS", "HARD", "単一出口以外での print 系直呼びの検出"),
+    ("missing-log-coverage", "§8.4 コミット時", "var:LOG_BOUNDARY_PATTERNS", "SOFT",
      "I/O・エラー境界のログ被覆（soft・NO-LOG: で免除可視化）"),
-    ("missing-catch-unwind", "§8.2 コミット時", "var:FFI_BOUNDARY_FILE_PATTERNS", "FFI 境界の catch_unwind 欠落検出"),
-    ("deprecated-api", "§3.3 コミット時", "var:DEPRECATED_PATTERNS", "世代交代した旧 API の使用検出（全コード走査）"),
-    ("ui-missing-testid", "§12.4 コミット時", "var:UI_TESTID_RULES", "UI 操作要素のテスト ID 欠落検出"),
-    ("binding-drift", "§12.7 コミット時", "always", "バインディング刻印の不一致検出"),
-    ("binding-unstamped", "§12.7 コミット時", "always", "刻印未設定の注意喚起（soft）"),
-    ("binding-dead-pattern", "§3.3 コミット時", "always", "充填パターンの拡張子取りこぼし（充填時の不発）検出"),
-    ("binding-dead-path", "§3.3 コミット時", "always", "充填パスのファイル移動ドリフト（充填後の不発）検出（soft）"),
-    ("hook-type-missing", "§3.3 コミット時", "always", "pre-commit シムの部分欠落（install 忘れ）検出"),
-    ("hooks-path-overridden", "§3.3 コミット時", "always", "core.hooksPath による全フック迂回の静的検出"),
-    ("hooks-not-installed", "§3.3 コミット時", "always", "シム未導入の注意喚起（soft・Step 3 前の正常状態）"),
-    ("installer-token-drift", "§3.3 コミット時", "static:キット原本限定",
-     "インストーラ検証条項のフック追随漏れ検出"),
-    ("context-doc-too-large", "§3.3 コミット時", "always", "常時読込文書の肥大警告（soft・Skills 化のセンサー）"),
-    ("file-too-long", "§3.3 コミット時", "always", "1ファイル500行超の警告（soft）"),
-    ("dir-too-crowded", "§3.3 コミット時", "always", "1フォルダ7ファイル超の警告（soft）"),
-    ("chronic-soft-violation", "§3.3 コミット時", "always",
-     "同一箇所の file-too-long/dir-too-crowded が複数回の実行にまたがって慢性化（soft・"
-     "ローカル違反ログ §3.6 が土台）"),
-    ("missing-role-header", "§3.3 コミット時", "var:HEADER_REQUIRED_EXTS", "役割一行ヘッダーの欠落警告（soft）"),
-    ("missing-folder-claude-md", "§3.3 コミット時", "var:REQUIRED_SOFT_PATHS", "レイヤーCLAUDE.md の欠落警告（soft）"),
-    ("orphan-file", "§3.3 コミット時", "var:ORPHAN_UNIVERSES", "どこからも import されない孤立ファイル警告（soft）"),
-    ("gates-registry-drift", "§3.3 コミット時", "always", "この台帳自体と検査器コードの不一致検出（台帳の門）"),
-    ("phase-table-drift", "§10 コミット時", "always", "Phase台帳とPhase見出しの不一致検出"),
-    ("codeowners-source-template", "§3.3 コミット時", "static:キット原本限定",
+    ("missing-catch-unwind", "§8.2 コミット時", "var:FFI_BOUNDARY_FILE_PATTERNS", "HARD",
+     "FFI 境界の catch_unwind 欠落検出"),
+    ("deprecated-api", "§3.3 コミット時", "var:DEPRECATED_PATTERNS", "HARD",
+     "世代交代した旧 API の使用検出（全コード走査）"),
+    ("ui-missing-testid", "§12.4 コミット時", "var:UI_TESTID_RULES", "HARD", "UI 操作要素のテスト ID 欠落検出"),
+    ("binding-drift", "§12.7 コミット時", "always", "HARD", "バインディング刻印の不一致検出"),
+    ("binding-unstamped", "§12.7 コミット時", "always", "SOFT", "刻印未設定の注意喚起（soft）"),
+    ("binding-dead-pattern", "§3.3 コミット時", "always", "HARD", "充填パターンの拡張子取りこぼし（充填時の不発）検出"),
+    ("binding-dead-path", "§3.3 コミット時", "always", "SOFT", "充填パスのファイル移動ドリフト（充填後の不発）検出（soft）"),
+    ("hook-type-missing", "§3.3 コミット時", "always", "HARD", "pre-commit シムの部分欠落（install 忘れ）検出"),
+    ("hooks-path-overridden", "§3.3 コミット時", "always", "HARD", "core.hooksPath による全フック迂回の静的検出"),
+    ("hooks-not-installed", "§3.3 コミット時", "always", "SOFT", "シム未導入の注意喚起（soft・Step 3 前の正常状態）"),
+    ("installer-token-drift", "§3.3 コミット時", "static:キット原本限定", "HARD", "インストーラ検証条項のフック追随漏れ検出"),
+    ("context-doc-too-large", "§3.3 コミット時", "always", "SOFT", "常時読込文書の肥大警告（soft・Skills 化のセンサー）"),
+    ("file-too-long", "§3.3 コミット時", "always", "SOFT", "1ファイル500行超の警告（soft）"),
+    ("dir-too-crowded", "§3.3 コミット時", "always", "SOFT", "1フォルダ7ファイル超の警告（soft）"),
+    ("chronic-soft-violation", "§3.3 コミット時", "always", "SOFT",
+     "同一箇所の file-too-long/dir-too-crowded が複数回の実行にまたがって慢性化（soft・ローカル違反ログ §3.6 が土台）"),
+    ("soft-ratchet-exceeded", "§3.3 コミット時", "always", "SOFT",
+     "soft警告の規則ID別件数がベースライン（soft_baseline.json）を超過——総量漸増の可視化"),
+    ("soft-ratchet-unbaselined", "§3.3 コミット時", "always", "SOFT",
+     "ベースライン未生成の注意喚起（dev.py ratchet で生成・追跡——見える猶予）"),
+    ("missing-role-header", "§3.3 コミット時", "var:HEADER_REQUIRED_EXTS", "SOFT",
+     "役割一行ヘッダーの欠落警告（soft）"),
+    ("missing-folder-claude-md", "§3.3 コミット時", "var:REQUIRED_SOFT_PATHS", "SOFT",
+     "レイヤーCLAUDE.md の欠落警告（soft）"),
+    ("orphan-file", "§3.3 コミット時", "var:ORPHAN_UNIVERSES", "SOFT",
+     "どこからも import されない孤立ファイル警告（soft）"),
+    ("gates-registry-drift", "§3.3 コミット時", "always", "HARD", "この台帳自体と検査器コードの不一致検出（台帳の門）"),
+    ("gates-severity-drift", "§3.3 コミット時", "always", "HARD",
+     "この台帳の severity 宣言と検査器の実 emit の不一致検出（散文の契約主張を持たないための門）"),
+    ("phase-table-drift", "§10 コミット時", "always", "HARD", "Phase台帳とPhase見出しの不一致検出"),
+    ("codeowners-source-template", "§3.3 コミット時", "static:キット原本限定", "HARD",
      "原本の実効 CODEOWNERS と導入先 placeholder テンプレートの分離を強制"),
     # --- §3.4 commit-msg 検査 ---
-    ("commit-msg-format", "§3.4 コミット時", "always", "コミットメッセージ形式（feat|fix|test|docs|refactor|chore:）"),
-    ("fix-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS",
+    ("commit-msg-format", "§3.4 コミット時", "always", "HARD",
+     "コミットメッセージ形式（feat|fix|test|docs|refactor|chore:）"),
+    ("fix-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS", "HARD",
      "fix: への回帰テスト同梱の機械強制（G10）"),
-    ("governance-without-goal", "§3.4 コミット時", "always", "正本3文書の変更に G 引用が無ければ拒否"),
-    ("undeclared-dependency", "§3.4 コミット時", "always", "依存の黙認追加の拒否（本文に宣言1行を要求）"),
-    ("feat-without-plan", "§3.4 コミット時", "var:PLAN_LAYER_ROOTS", "新規構造への設計根拠同梱の機械強制（G14）"),
-    ("feat-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS",
+    ("governance-without-goal", "§3.4 コミット時", "always", "HARD", "正本3文書の変更に G 引用が無ければ拒否"),
+    ("undeclared-dependency", "§3.4 コミット時", "always", "HARD", "依存の黙認追加の拒否（本文に宣言1行を要求）"),
+    ("feat-without-plan", "§3.4 コミット時", "var:PLAN_LAYER_ROOTS", "HARD", "新規構造への設計根拠同梱の機械強制（G14）"),
+    ("feat-without-test", "§3.4 コミット時", "vars:TEST_PATH_PATTERNS|INLINE_TEST_PATTERNS", "SOFT",
      "feat: のテスト欠落警告（soft）"),
-    ("commit-too-large", "§3.4 コミット時", "always", "コミット規模の警告（soft）"),
-    ("test-shrink", "§3.4 コミット時", "var:TEST_PATH_PATTERNS", "既存テストの純減警告（soft・弱体化の可視化）"),
-    ("doc-impact-undeclared", "§3.4 コミット時", "var:DOC_IMPACT_RULES",
+    ("commit-too-large", "§3.4 コミット時", "always", "SOFT", "コミット規模の警告（soft）"),
+    ("test-shrink", "§3.4 コミット時", "var:TEST_PATH_PATTERNS", "SOFT", "既存テストの純減警告（soft・弱体化の可視化）"),
+    ("doc-impact-undeclared", "§3.4 コミット時", "var:DOC_IMPACT_RULES", "SOFT",
      "利用者影響のあるソース変更に対応 doc の差分も DOCS-NOT-NEEDED 理由も無い警告（soft・列充填で有効化）"),
     # --- §5 CI（最終防衛線）---
-    ("red-first", "§5 CI", "static:CI（required・列充填で単一テスト実行）",
+    ("red-first", "§5 CI", "static:CI（required・列充填で単一テスト実行）", "-",
      "fix 同梱テストが親コミットで赤だった（バグを再現した）ことの機械証明"),
-    ("commit-msg-history-mismatch", "§5 CI", "static:CI",
+    ("commit-msg-history-mismatch", "§5 CI", "static:CI", "HARD",
      "PR 範囲の全コミットへ commit-msg 検査を履歴再実行（ローカルフック未導入でも門が掛かる）"),
-    ("ci-rerun-all", "§5 CI", "static:CI", "編集直後〜push の全検査の再実行（迂回の最終防衛線）"),
+    ("ci-rerun-all", "§5 CI", "static:CI", "-", "編集直後〜push の全検査の再実行（迂回の最終防衛線）"),
     # --- §3.5 / §2 門の門（検査の検証）---
-    ("guard-corpus", "§2 門の門", "always", "迂回ブロッカー自身のコーパス回帰再生（門番の回帰テスト）"),
-    ("ownership-guard-scenarios", "§2c 門の門", "always", "所有権ガードの複数手順シナリオ再生"),
-    ("codex-hooks-check", "§2 門の門", "always", "Codex フック設定とアダプタの回帰検査"),
-    ("check-bootstrap", "§3.5 導入時", "always", "進捗台帳の ✅ を再実行検証（虚偽✅・順序スキップの門）"),
-    ("violation-ledger", "§3.6 常時", "always", "門が止めた事象の機械記録（soft→hard 昇格を計数で判断する土台）"),
+    ("guard-corpus", "§2 門の門", "always", "-", "迂回ブロッカー自身のコーパス回帰再生（門番の回帰テスト）"),
+    ("ownership-guard-scenarios", "§2c 門の門", "always", "-", "所有権ガードの複数手順シナリオ再生"),
+    ("codex-hooks-check", "§2 門の門", "always", "-", "Codex フック設定とアダプタの回帰検査"),
+    ("check-bootstrap", "§3.5 導入時", "always", "-", "進捗台帳の ✅ を再実行検証（虚偽✅・順序スキップの門）"),
+    ("violation-ledger", "§3.6 常時", "always", "-", "門が止めた事象の機械記録（soft→hard 昇格を計数で判断する土台）"),
     # --- §11 前段 / §12 導入・ランタイム ---
-    ("install-detect", "§11 導入", "static:install_kit.py --detect", "採用列の候補をマニフェストから提示"),
-    ("install-diff-check", "§11 導入", "static:install_kit.py --diff/--check",
+    ("install-detect", "§11 導入", "static:install_kit.py --detect", "-", "採用列の候補をマニフェストから提示"),
+    ("install-diff-check", "§11 導入", "static:install_kit.py --diff/--check", "-",
      "適用前プレビューと CI 用ドリフト検出"),
-    ("fill-bindings", "§11 導入", "static:fill_bindings.py <列ID@版>",
+    ("fill-bindings", "§11 導入", "static:fill_bindings.py <列ID@版>", "-",
      "採用列の paste-block を管理区画へ機械充填＋刻印（Step 0/2 のコピペ作業の機械化）"),
-    ("rule-dod", "§11 導入", "always",
-     "列の違反注入コーパス再生（注入→発火→除去→沈黙の機械証明——dev.py dod）"),
-    ("managed-splice", "§11 更新", "static:UPGRADED 時に自動", "管理区画の充填を保持したままキットを更新"),
-    ("dev-verbs", "§12.1 実行時", "always", "全プロジェクト共通の開発動詞ルーター（未配線は明示エラー）"),
-    ("probe", "§12.1 実行時", "always", "迂回防止への事前照会（実行前に ALLOW/DENY）"),
-    ("probe-live", "§12.1 実行時", "always", "実ホスト経路のフック発火を sentinel で実測"),
-    ("selftest", "§12.1 実行時", "always", "門の違反注入コーパス一括再生"),
-    ("doctor", "§12.1 実行時", "always", "環境診断の集約表示 → check 実行"),
+    ("rule-dod", "§11 導入", "always", "-", "列の違反注入コーパス再生（注入→発火→除去→沈黙の機械証明——dev.py dod）"),
+    ("managed-splice", "§11 更新", "static:UPGRADED 時に自動", "-", "管理区画の充填を保持したままキットを更新"),
+    ("dev-verbs", "§12.1 実行時", "always", "-", "全プロジェクト共通の開発動詞ルーター（未配線は明示エラー）"),
+    ("probe", "§12.1 実行時", "always", "-", "迂回防止への事前照会（実行前に ALLOW/DENY）"),
+    ("probe-live", "§12.1 実行時", "always", "-", "実ホスト経路のフック発火を sentinel で実測"),
+    ("selftest", "§12.1 実行時", "always", "-", "門の違反注入コーパス一括再生"),
+    ("doctor", "§12.1 実行時", "always", "-", "環境診断の集約表示 → check 実行"),
 ]
 # gates-registry-drift の照合対象（検査器コードとの一致を強制する区分）
 GATE_REGISTRY_ENFORCED = {"§3.3", "§3.4", "§8.2", "§8.4", "§9.6", "§12.4", "§12.7"}

@@ -403,7 +403,11 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
 **新しい規則を足す時のレシピ（登録先の唯一の一覧——v2.45・Phase 47 の是正）**: 規則1つの
 登録先は最大5箇所に増えた。漏れの大半は機械が検出するが、書く手間の道しるべはここ1箇所:
 ① 検査の実装（check_structure / check_commit_msg）＋本節の契約1行
-② `repo_scan.py` の `GATE_REGISTRY` に1行（漏れは `gates-registry-drift` が hard で検出）
+② `repo_scan.py` の `GATE_REGISTRY` に1行＝**severity 宣言列込み**（ID の漏れは
+   `gates-registry-drift`・severity の食い違いは `gates-severity-drift` が hard で検出
+   ——v2.64・Phase 65）。**機械検査の相方を持たない契約主張（hard/soft・発火条件・
+   不発条件）を散文にだけ書かない**: 判定列が書ける主張は台帳の構造化列へ昇格させ、
+   散文は台帳への参照に留める（散文と実装の乖離は機械が守れない — G9/G5）
 ③ 可能なら違反注入コーパスへ1ケース（`tests/injections/`——注入で再現できない規則は
    Phase 47 追記の対象外5分類へ理由を足す）
 ④ 列充填が要る規則はバインディング変数の新設＋カタログの列（`binding-dead-pattern` /
@@ -491,6 +495,15 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   検査器が emit する規則IDが台帳に無い（未登録）／台帳の強制対象区分のIDが検査器の
   どこにも現れない（幽霊規則）。台帳は「何ができるか」の発見導線であり、腐ると一覧が
   嘘をつく——STRUCTURE.md 鮮度検査（§3.2）の機能一覧版（G4/G9）
+- ✅ `gates-severity-drift` — 台帳の **severity 宣言列**（`HARD`/`SOFT`/`HARD→SOFT`/`-`）
+  と検査器の実 emit の不一致（v2.64・Phase 65）。3型: 非emit（`-`）宣言なのに emit が
+  ある／emit された severity が宣言に無い／宣言した severity の emit が見つからない。
+  従来 severity は台帳の説明文に「(soft)」と**散文でのみ**書かれ機械照合されていなかった
+  ——採用先実測で「散文の契約主張と実装の乖離」を人力監査だけが捕まえた事故の、キット
+  自身の台帳への同型対策（設計判断は docs/plans/2026-08-05-gate-severity-contract.md）。
+  境界: 変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由）はリテラル捕捉に掛からず
+  照合対象外。散文主張の真偽一般も対象外（§2e）——照合できるのは判定列が書ける severity
+  のみ（G9/G4/G5）
 - ✅ `installer-token-drift` — **キット原本限定**（v2.38・Phase 41）: インストーラの検証条項
   （`PRECOMMIT_REQUIRED`・settings 系の判定文字列）がキット自身のローカルフック/フック
   ファイルに追随していない。導入済みリポジトリの更新はインストーラ再実行だが、
@@ -500,6 +513,17 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   キットのフックを機械判別できないため原本側で堰き止める（kit-source-exempt と対称）
 
 **soft（警告のみ・コミットは通る）**:
+- （列充填で有効化）`scan-without-floor` — **走査型テストの空定義域**（v2.66・Phase 67）:
+  テストファイル内にディレクトリ走査呼び出し（`SCAN_CALL_PATTERNS`——4同梱列は既定値
+  充填済み）があるのに、件数下限/実測ピンとみなせる assert（`SCAN_FLOOR_PATTERNS`）も
+  `SCAN-FLOOR-EXEMPT: 理由` も同一ファイルに無い。「空集合の上の緑」（走査対象が0件に
+  なってもテストが空虚に合格し続ける——採用先実測: fixture 走査が CWD 解決ミスで恒久0件
+  走査となり、是正の瞬間に16件の登録漏れが噴出）の検出。`binding-dead-pattern` /
+  `binding-dead-path` がバインディング変数の定義域空化を守るのに対し、テストコード自身の
+  走査ループという未被覆だった同族を塞ぐ（G9。設計判断は
+  docs/plans/2026-08-05-scan-floor-assert.md）。判定はファイル単位・警告は最初の走査行に
+  1件。下限が守るのは「0件で緑にならない」まで——実測件数の**等値ピン**が上位互換
+  （強制せず推奨——カタログ注記。免除は存在検査のみ・NO-LOG: と同じ境界）
 - ✅ 1ファイル500行超
 - ✅ 1フォルダに `CLAUDE.md` 以外で7ファイル超（`scripts/` は例外で無制限）
 - ✅ ファイル先頭の役割一行ヘッダー未記述・形式不正
@@ -539,6 +563,21 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   無く不発（`binding-unstamped` と同じ「見える猶予」）。**違反注入コーパス対象外**
   （`tests/injections/`）: 複数回の実行履歴の蓄積が前提であり、ランナーは1ケースを
   単発追加して1回実行する設計のため再現できない（§3.3 冒頭のレシピ③注記）。
+- ✅ `soft-ratchet-exceeded` — soft 警告の**規則ID別件数**が追跡ベースライン
+  （`.guardrails/soft_baseline.json`——生成・更新は `dev.py ratchet` が唯一の主体・
+  手編集しない）を超過（v2.65・Phase 66）。`chronic-soft-violation` が「同一箇所の
+  慢性化×ローカル台帳（CI不発）」を見るのに対し、こちらは「総量の漸増×git 追跡
+  （CI でも効く）」——採用先実測で soft 164件が正常化ノイズと化した「ゆでガエル」経路を
+  塞ぐ直交軸（重複登録ではない — G5。設計判断は docs/plans/2026-08-05-soft-ratchet.md）。
+  規則IDごとに1行・`m→n 件に増加` の差分形式で出す（G4）。意図的な増加は同一コミットに
+  `dev.py ratchet` の差分を同梱して通す＝守りが緩む方向の変更を diff に可視化
+  （GOALS「降格の統治」と同じ非対称）。件数の減少は finding にせず情報行で引き下げを促す。
+  限界の明記: 箇所の入れ替わり（1件解消＋1件新規＝横ばい）には盲目——箇所単位は
+  `chronic-soft-violation` の持ち場（G9/G4）
+- ✅ `soft-ratchet-unbaselined` — ベースライン未生成/解釈不能の注意喚起（`dev.py ratchet`
+  で生成・追跡する——`binding-unstamped` と同じ「見える猶予」。キット原本は実測値で
+  充填済みを同梱するが、値はリポジトリ固有のため**導入先には配布しない**
+  （`install_kit.py` META_FILES）——導入先はこの警告→ `ratchet` 実行が正規経路）
 
 **出荷状態の想定出力**: v2キットを配置した直後の `check` は
 `HARD:missing-required AGENTS.md`・`HARD:missing-required CLAUDE.md`・
@@ -1343,6 +1382,9 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 | 62 | check_bootstrap Step 3のCI誤検知是正 | §3.5 §11 Step 3 | ✅（v2.60 同梱） |
 | 63 | 慢性化したsoft違反の検出 `chronic-soft-violation`（関心事分割の放置歯止め） | §3.3 §3.6 | ✅（v2.61 同梱） |
 | 64 | doc影響の未申告検出 `doc-impact-undeclared`（soft 導入・列充填。ソース⇔doc対応表） | §3.4 検査9・bindings/catalog.md | ✅（v2.63 同梱） |
+| 65 | 台帳severity宣言と実装の双方向照合 `gates-severity-drift`（散文の契約主張の構造化列昇格） | §3.3・§12.1 gates | ✅（v2.64 同梱） |
+| 66 | soft警告の規則ID別ラチェット `soft-ratchet-exceeded`（総量漸増の可視化・`dev.py ratchet`） | §3.3・§12.1 | ✅（v2.65 同梱） |
+| 67 | 走査型テストの空定義域検出 `scan-without-floor`（soft・列充填。4同梱列に既定値） | §3.3・bindings/catalog.md | ✅（v2.66 同梱） |
 
 ### Phase 1 — Python(uv) 移植 ✅（v2キットに同梱済み）
 - `.python-version`・`scripts/repo_scan.py`・`generate_structure.py`・`check_structure.py`
@@ -2447,6 +2489,106 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
   別の機構（例: 特定文書への「訂正」記載と正本台帳の同時更新を対で強制する検査）が要り、
   対象外であることを次の判断者が再発見しなくて済むよう本節に明記する。
 
+### Phase 65 — v2.64 同梱 ✅（台帳severity宣言と実装の双方向照合 `gates-severity-drift`）（G9/G4/G5）
+
+- 発端: 採用先リポジトリのブートストラップ実測（3日間・2026-08）の監査で、「散文の
+  契約主張とコードの乖離」が機械検査の空白として露出した——文書上の「soft で全て不発」
+  という過大主張を実装と突き合わせたのは人力監査だけだった。同型を自分の台帳から塞ぐ:
+  `GATE_REGISTRY` の severity は説明文中の「(soft)」という**照合されない散文**であり、
+  gates-registry-drift（Phase 45）の ID 照合はこの乖離を素通ししていた。
+  設計判断は docs/plans/2026-08-05-gate-severity-contract.md。
+- 実装: `GATE_REGISTRY` を5タプル化し severity 宣言列（`HARD`/`SOFT`/`HARD→SOFT`
+  （kit-source-exempt 等の降格パス持ち）/`-`（非emit の道具・フック行））を追加。
+  `_GATE_EMIT_PATTERNS` を (severity, 規則ID) 対の捕捉へ拡張し、宣言との不一致3型
+  （非emit宣言なのにemit／宣言に無いseverityのemit／宣言severityのemit欠落）を
+  `HARD:gates-severity-drift` で検出。`dev.py gates` の一覧にも severity 列を表示（G4）。
+- **hard 直行**の判断: 照合は台帳とソースの両方がリポジトリ内で完結する決定的な文字列
+  比較で、偽陽性の構造的余地が無い——soft で実測すべき不確かさが存在しない
+  （.guardrails/GOALS.md 非対称閾値①相当。②の soft 前例 feat-without-plan とは性質が違う）。
+- 境界（対象外の明記）: ①変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由の
+  agents-import-missing）はリテラル捕捉に掛からない——captured 空の行は照合スキップ
+  （ID の存在は既存の双方向照合が守る） ②非emit行（`-`）への誤宣言のうち「emit が無い」
+  方向は検出不能（見るべき実体が無い） ③散文主張の真偽一般は §2e の境界どおり対象外。
+  §3.3 のレシピに「判定列が書ける契約主張は散文でなく台帳の構造化列へ」を追記した——
+  照合対象を増やす正規経路。
+- 違反注入コーパス対象外（Phase 47 の分類②キット自己検査系——正本 `repo_scan.py` 自体の
+  改変が必要で、追加専用ランナーでは再現できない。gates-registry-drift と同じ扱い）。
+- DoD（実測済み 2026-08-05）: ①`mcp-not-allowed` の宣言を HARD→SOFT へ反転 →
+  `HARD:gates-severity-drift` 2行（宣言に無い HARD emit／SOFT emit 欠落）で exit 1
+  ②`mcp-unparseable` を `-` へ反転 → 「非emit宣言だが SOFT で emit」で exit 1
+  ③除去 → 沈黙（exit 0・全68行の宣言が実装と一致）。
+
+### Phase 66 — v2.65 同梱 ✅（soft警告の規則ID別ラチェット `soft-ratchet-exceeded`）（G9/G4/G2）
+
+- 発端: 採用先リポジトリの実測で **soft 警告 164 件が正常化したノイズ**になった。soft の
+  設計前提「1回の見送りは可・無理由の放置は歯止めが塞ぐ」に対し、既存の歯止め
+  `chronic-soft-violation`（Phase 63）は①対象2規則・箇所単位 ②ローカル台帳依存で
+  CI・新規 clone では不発——「1件ずつ増えて総量が漸増する」経路をどの門も見ていなかった。
+  設計判断は docs/plans/2026-08-05-soft-ratchet.md。
+- 検討2案: グローバル総量上限（1閾値）は領域を跨いだ相殺（ある規則の解消が別の規則の
+  増加を隠す——164のまま中身が入れ替わる）を許すため不採用。**規則ID別ラチェット**を採用
+  ——警告1行が「どの規律が緩んでいるか」を規則IDでそのまま指す（G4）。
+- 実装: 追跡ファイル `.guardrails/soft_baseline.json`（`{"規則ID": 許容件数}` の平坦辞書）
+  ＋ `dev.py ratchet`（生成・更新の**唯一の主体**——手編集も検査器による自動書き換えも
+  しない。検査のたびに diff が動く台帳は台帳でなくなる）＋ `check_structure` 末尾の
+  `check_soft_ratchet`（全 soft 検査の後という順序契約——chronic と同じく collect が保証）。
+  超過 = `SOFT:soft-ratchet-exceeded`（規則IDごと1行・`m→n` の差分形式）、
+  未生成/解釈不能 = `SOFT:soft-ratchet-unbaselined`（見える猶予・壊れた台帳で静かに
+  不発にしない）、減少 = finding にせず情報行（引き下げ忘れは次の増加を隠す余白——黙らない）。
+- 配布の判断: ベースラインは**リポジトリ固有の実測値**のため導入先に配布しない
+  （`install_kit.py` META_FILES へ追加）。原本の値を配ると導入先で最初から嘘の台帳になる
+  （見えない過大枠 or 偽超過）——doc-impact の存在ガード（Phase 64）と同族の「原本では
+  生きる・導入先では正規経路（unbaselined → ratchet）へ倒す」形。キット原本自身は
+  実測値（3規則・計3件——§3.3 出荷状態の想定 SOFT）で充填済みを同梱する。
+  副作用の明記: pre-commit 未導入のローカル新規 clone では `hooks-not-installed`（CI では
+  スキップされる soft）が一時的に超過警告を出す——Step 3 の `pre-commit install` で解消する
+  一時状態であり、見える猶予と同じ扱い。
+- **soft 導入**（hard にしない理由）: 比較自体は決定的だが、運用摩擦（正当な増加の頻度・
+  ベースライン更新の儀式化リスク）が未実測——非対称閾値②（前例 feat-without-plan）に従い、
+  違反ログ（§3.6）の計数で実測してから hard 昇格を判断する。
+- 意図的な増加の正規経路: 違反を残す判断をしたコミットに `dev.py ratchet` の差分を同梱する
+  ＝守りが緩む方向の変更が diff とレビューに必ず現れる（GOALS「降格の統治」と同じ非対称）。
+- DoD（実測済み 2026-08-05）: ①コーパス（common.json へ `soft-ratchet-exceeded` 1ケース
+  ——7ファイル超のディレクトリ注入で dir-too-crowded を 0→1 に増やし超過を誘発）
+  DOD:PASS・除去後沈黙 ②ベースライン不在 → unbaselined 発火 ③解釈不能 JSON →
+  unbaselined（解釈不能）発火 ④実測より高い値 → 減少情報行 ⑤復元 → 沈黙 exit 0。
+  `soft-ratchet-unbaselined` 自体はコーパス対象外（原本にベースライン同梱済み＝注入先が
+  既存で SKIP(exists)——除去・改変系①の分類。手動 DoD ②③が持ち場）。
+
+### Phase 67 — v2.66 同梱 ✅（走査型テストの空定義域検出 `scan-without-floor`）（G9/G7/G13）
+
+- 発端: 採用先リポジトリの実測で最大の教訓となった「**空集合の上の緑**」——fixture 走査型
+  テストが CWD 解決ミスで恒久的に0ファイル走査＝空虚に合格し続け、走査を直した瞬間に
+  16件の登録漏れが噴出した。採用先の規約文書には「登録≠実行」の罠として類例が3件記録済み
+  だったのに再発した＝**心得では防げない型**（門 > 心得）。既存の `binding-dead-pattern` /
+  `binding-dead-path` はバインディング変数の定義域空化しか守っておらず、テストコード自身の
+  走査ループは同族の未被覆領域だった。設計判断は docs/plans/2026-08-05-scan-floor-assert.md。
+- 検討2案: 実行時計測（テストランナーをラップして走査件数を実測）は正確だが、キットは
+  テスト実行系を持たずランナー非依存に作れない（G13違反）——不採用。**静的存在検査**を採用:
+  走査呼び出し（`SCAN_CALL_PATTERNS`）を含むテストファイルに、件数下限/実測ピンとみなせる
+  assert（`SCAN_FLOOR_PATTERNS`）か `SCAN-FLOOR-EXEMPT: 理由` を要求する。存在検査のみ・
+  assert の質は検査しない（NO-LOG: / RED-FIRST-EXEMPT: と同じ境界）。
+- 実装: 列充填の2変数＋`check_scan_floor`（ファイル単位判定・警告は最初の走査行に1件——
+  行近傍への厳密化は採用先の偽陽性実測後 §7.4）。両変数は `binding-dead-pattern` の照合
+  対象に追加（充填時の拡張子取りこぼし＝この検査自身の静かな不発も既存の門が守る）。
+  **4同梱列に既定値を定義して出荷**（python: glob/rglob/iterdir/listdir/walk/scandir、
+  ts: readdirSync/globby/fast-glob、rust: read_dir/glob、dart: Directory.list/listSync——
+  走査 API は言語固有＝列の性質のため repo_scan の中立既定値ではなく列で持つ。
+  キット原本自身は未充填のまま＝`var:` 型の「見える猶予」で `dev.py gates` に表示される）。
+- **soft 導入**（hard にしない理由）: 走査 API パターンの網羅性・floor 判定の偽陽性率は
+  採用先の実測でしか検証できない（非対称閾値②。前例 feat-without-plan）。
+- 対象外の明記: ①「意図した部分集合を走査しているか」は判定不能——16件の登録漏れその
+  ものを塞ぐのは**等値ピン**（実測件数の == 固定）であり、等値は仕様変更のたびの更新が
+  要るため強制せずカタログ注記の推奨に留める（下限の強制は「0件で緑」の封鎖まで）
+  ②キット自身の検査器（`scripts/check_*.py`——`is_test_file` 対象外）は probe / 実測ピンの
+  慣行が既にあり対象外（重複させない — G5）。
+- DoD（実測済み 2026-08-05・作業ツリーのコピー上で fill 一時適用）: 4列すべてで
+  `fill_bindings <列>@新版` → `check_rule_dod <列>` を実行し、`scan-without-floor` ケース
+  DOD:PASS＋全ケース FAIL 0（python-uv@12: 20ケース／ts-react-web@14: 17ケース／
+  dart-flutter@10: 14ケース／rust@11: 17ケース）。抑制側も実測: 下限 assert あり→沈黙・
+  `SCAN-FLOOR-EXEMPT:` あり→沈黙。コーパスは4列 json へ `requires` 付きで同梱
+  （未充填リポジトリでは SKIP(unfilled) 表示——不発を PASS と偽らない G9）。
+
 ### 保留（トリガー待ち。トリガー成立まで実装しない——ここが登録先）
 - **免除・接頭辞の監査指標**（G4——v2.35 登録）: レビュー規約に割り当て済みの乱用点検
   （`RED-FIRST-EXEMPT:` / `NO-LOG:` / `NONDETERMINISM-EXEMPT:` の頻度・fix を refactor/chore
@@ -2883,7 +3025,9 @@ Step 1 と Step 10 の grep 検査の入力になる。
 - **`scripts/dev.py` が全プロジェクト共通の動詞**を提供する:
   `up` / `reset` / `seed` / `time` / `test` / `e2e` / `fmt` / `check` / `probe` / `db` /
   `selftest` / `doctor`（v2.42・Phase 44）/ `gates`（v2.43・Phase 45）/
-  `dod`（v2.45・Phase 47——列の違反注入コーパス再生。§11 Step 0）。
+  `dod`（v2.45・Phase 47——列の違反注入コーパス再生。§11 Step 0）/
+  `ratchet`（v2.65・Phase 66——soft ベースラインの生成・更新の唯一の主体。§3.3
+  `soft-ratchet-exceeded`）。
   **`gates` は「このキットが何をできるか」への正規の入口**——門の台帳
   （`repo_scan.py` の `GATE_REGISTRY`）を、このリポジトリでの実状態
   （常時有効／充填済み／未充填／配線済み）つきで一覧表示する。手書きの機能一覧を

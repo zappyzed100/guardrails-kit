@@ -48,6 +48,7 @@
 - `.guardrails/CUSTOMIZE.md`
 - `.guardrails/GOALS.md`
 - `.guardrails/GUARDRAILS.md`
+- `.guardrails/soft_baseline.json`
 
 ## `bindings/`
 
@@ -58,6 +59,9 @@
 - `docs/plans/2026-07-14-harness-tools-import.md`
 - `docs/plans/2026-07-15-test-log-3layer-rails.md`
 - `docs/plans/2026-07-28-doc-impact-check.md`
+- `docs/plans/2026-08-05-gate-severity-contract.md`
+- `docs/plans/2026-08-05-scan-floor-assert.md`
+- `docs/plans/2026-08-05-soft-ratchet.md`
 - `docs/plans/PLAN_FORMAT.md`
 
 ## `scripts/`
@@ -235,6 +239,7 @@
 - def check_layers
 - def check_required_content
 - def check_tests
+- def check_scan_floor
 - def check_gates_registry
 - def check_phase_table
 - def check_codeowners_source_template
@@ -255,6 +260,8 @@
 - def check_soft_limits
 - def check_chronic_soft_violations
 - def check_orphans
+- def check_soft_ratchet
+- def collect_findings
 - def main
 
 ### `scripts/check_workflow_integrity.py`
