@@ -99,7 +99,7 @@ def _gates(root: Path) -> int:
     if sp.is_file():
         settings_text = sp.read_text(encoding="utf-8", errors="replace")
     current = None
-    for gid, cat, act, desc in rs.GATE_REGISTRY:
+    for gid, cat, act, severity, desc in rs.GATE_REGISTRY:
         if cat != current:
             print(f"\n  [{cat}]")
             current = cat
@@ -116,7 +116,8 @@ def _gates(root: Path) -> int:
             status = "配線済み" if act[5:] in settings_text else "未配線（settings.json）"
         else:  # static:
             status = act.split(":", 1)[1]
-        print(f"    {gid:<28} {status:<24} {desc}")
+        # severity 宣言列（Phase 65）。実装との一致は gates-severity-drift が機械検査する
+        print(f"    {gid:<28} {severity:<9} {status:<24} {desc}")
     print("\n[dev] gates: 逃げ道・DoD・限界の詳細は各節。導入後のカスタム項目は "
           ".guardrails/CUSTOMIZE.md、保留（トリガー待ち）は §10 保留節")
     return 0

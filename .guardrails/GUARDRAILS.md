@@ -403,7 +403,11 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
 **新しい規則を足す時のレシピ（登録先の唯一の一覧——v2.45・Phase 47 の是正）**: 規則1つの
 登録先は最大5箇所に増えた。漏れの大半は機械が検出するが、書く手間の道しるべはここ1箇所:
 ① 検査の実装（check_structure / check_commit_msg）＋本節の契約1行
-② `repo_scan.py` の `GATE_REGISTRY` に1行（漏れは `gates-registry-drift` が hard で検出）
+② `repo_scan.py` の `GATE_REGISTRY` に1行＝**severity 宣言列込み**（ID の漏れは
+   `gates-registry-drift`・severity の食い違いは `gates-severity-drift` が hard で検出
+   ——v2.64・Phase 65）。**機械検査の相方を持たない契約主張（hard/soft・発火条件・
+   不発条件）を散文にだけ書かない**: 判定列が書ける主張は台帳の構造化列へ昇格させ、
+   散文は台帳への参照に留める（散文と実装の乖離は機械が守れない — G9/G5）
 ③ 可能なら違反注入コーパスへ1ケース（`tests/injections/`——注入で再現できない規則は
    Phase 47 追記の対象外5分類へ理由を足す）
 ④ 列充填が要る規則はバインディング変数の新設＋カタログの列（`binding-dead-pattern` /
@@ -491,6 +495,15 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   検査器が emit する規則IDが台帳に無い（未登録）／台帳の強制対象区分のIDが検査器の
   どこにも現れない（幽霊規則）。台帳は「何ができるか」の発見導線であり、腐ると一覧が
   嘘をつく——STRUCTURE.md 鮮度検査（§3.2）の機能一覧版（G4/G9）
+- ✅ `gates-severity-drift` — 台帳の **severity 宣言列**（`HARD`/`SOFT`/`HARD→SOFT`/`-`）
+  と検査器の実 emit の不一致（v2.64・Phase 65）。3型: 非emit（`-`）宣言なのに emit が
+  ある／emit された severity が宣言に無い／宣言した severity の emit が見つからない。
+  従来 severity は台帳の説明文に「(soft)」と**散文でのみ**書かれ機械照合されていなかった
+  ——採用先実測で「散文の契約主張と実装の乖離」を人力監査だけが捕まえた事故の、キット
+  自身の台帳への同型対策（設計判断は docs/plans/2026-08-05-gate-severity-contract.md）。
+  境界: 変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由）はリテラル捕捉に掛からず
+  照合対象外。散文主張の真偽一般も対象外（§2e）——照合できるのは判定列が書ける severity
+  のみ（G9/G4/G5）
 - ✅ `installer-token-drift` — **キット原本限定**（v2.38・Phase 41）: インストーラの検証条項
   （`PRECOMMIT_REQUIRED`・settings 系の判定文字列）がキット自身のローカルフック/フック
   ファイルに追随していない。導入済みリポジトリの更新はインストーラ再実行だが、
@@ -1343,6 +1356,7 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 | 62 | check_bootstrap Step 3のCI誤検知是正 | §3.5 §11 Step 3 | ✅（v2.60 同梱） |
 | 63 | 慢性化したsoft違反の検出 `chronic-soft-violation`（関心事分割の放置歯止め） | §3.3 §3.6 | ✅（v2.61 同梱） |
 | 64 | doc影響の未申告検出 `doc-impact-undeclared`（soft 導入・列充填。ソース⇔doc対応表） | §3.4 検査9・bindings/catalog.md | ✅（v2.63 同梱） |
+| 65 | 台帳severity宣言と実装の双方向照合 `gates-severity-drift`（散文の契約主張の構造化列昇格） | §3.3・§12.1 gates | ✅（v2.64 同梱） |
 
 ### Phase 1 — Python(uv) 移植 ✅（v2キットに同梱済み）
 - `.python-version`・`scripts/repo_scan.py`・`generate_structure.py`・`check_structure.py`
@@ -2446,6 +2460,35 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
   **外**——diff に現れるソース変更を起点にした検査では構造的に拾えない。この型を塞ぐには
   別の機構（例: 特定文書への「訂正」記載と正本台帳の同時更新を対で強制する検査）が要り、
   対象外であることを次の判断者が再発見しなくて済むよう本節に明記する。
+
+### Phase 65 — v2.64 同梱 ✅（台帳severity宣言と実装の双方向照合 `gates-severity-drift`）（G9/G4/G5）
+
+- 発端: 採用先リポジトリのブートストラップ実測（3日間・2026-08）の監査で、「散文の
+  契約主張とコードの乖離」が機械検査の空白として露出した——文書上の「soft で全て不発」
+  という過大主張を実装と突き合わせたのは人力監査だけだった。同型を自分の台帳から塞ぐ:
+  `GATE_REGISTRY` の severity は説明文中の「(soft)」という**照合されない散文**であり、
+  gates-registry-drift（Phase 45）の ID 照合はこの乖離を素通ししていた。
+  設計判断は docs/plans/2026-08-05-gate-severity-contract.md。
+- 実装: `GATE_REGISTRY` を5タプル化し severity 宣言列（`HARD`/`SOFT`/`HARD→SOFT`
+  （kit-source-exempt 等の降格パス持ち）/`-`（非emit の道具・フック行））を追加。
+  `_GATE_EMIT_PATTERNS` を (severity, 規則ID) 対の捕捉へ拡張し、宣言との不一致3型
+  （非emit宣言なのにemit／宣言に無いseverityのemit／宣言severityのemit欠落）を
+  `HARD:gates-severity-drift` で検出。`dev.py gates` の一覧にも severity 列を表示（G4）。
+- **hard 直行**の判断: 照合は台帳とソースの両方がリポジトリ内で完結する決定的な文字列
+  比較で、偽陽性の構造的余地が無い——soft で実測すべき不確かさが存在しない
+  （.guardrails/GOALS.md 非対称閾値①相当。②の soft 前例 feat-without-plan とは性質が違う）。
+- 境界（対象外の明記）: ①変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由の
+  agents-import-missing）はリテラル捕捉に掛からない——captured 空の行は照合スキップ
+  （ID の存在は既存の双方向照合が守る） ②非emit行（`-`）への誤宣言のうち「emit が無い」
+  方向は検出不能（見るべき実体が無い） ③散文主張の真偽一般は §2e の境界どおり対象外。
+  §3.3 のレシピに「判定列が書ける契約主張は散文でなく台帳の構造化列へ」を追記した——
+  照合対象を増やす正規経路。
+- 違反注入コーパス対象外（Phase 47 の分類②キット自己検査系——正本 `repo_scan.py` 自体の
+  改変が必要で、追加専用ランナーでは再現できない。gates-registry-drift と同じ扱い）。
+- DoD（実測済み 2026-08-05）: ①`mcp-not-allowed` の宣言を HARD→SOFT へ反転 →
+  `HARD:gates-severity-drift` 2行（宣言に無い HARD emit／SOFT emit 欠落）で exit 1
+  ②`mcp-unparseable` を `-` へ反転 → 「非emit宣言だが SOFT で emit」で exit 1
+  ③除去 → 沈黙（exit 0・全68行の宣言が実装と一致）。
 
 ### 保留（トリガー待ち。トリガー成立まで実装しない——ここが登録先）
 - **免除・接頭辞の監査指標**（G4——v2.35 登録）: レビュー規約に割り当て済みの乱用点検

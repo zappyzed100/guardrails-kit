@@ -133,10 +133,11 @@ def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
                                     f"{label}。テストは {rs.SOLVER_TEST_WRAPPER_NAME} 経由のみ（§9.1）"))
 
 
+# 捕捉は (severity, 規則ID) の対（v2.64・Phase 65——ID だけでなく severity も照合する）
 _GATE_EMIT_PATTERNS = [
-    re.compile(r'\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
-    re.compile(r'_emit\("(?:HARD|SOFT)",\s*"([a-z0-9-]+)"'),  # check_commit_msg の _emit 形
-    re.compile(r'"(?:HARD|SOFT):([a-z0-9-]+)'),           # 文字列直書き形（履歴再実行等）
+    re.compile(r'\("(HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
+    re.compile(r'_emit\("(HARD|SOFT)",\s*"([a-z0-9-]+)"'),  # check_commit_msg の _emit 形
+    re.compile(r'"(HARD|SOFT):([a-z0-9-]+)'),           # 文字列直書き形（履歴再実行等）
 ]
 _GATE_SOURCE_FILES = ["scripts/check_structure.py", "scripts/check_commit_msg.py",
                       "scripts/repo_scan.py"]
@@ -144,11 +145,20 @@ _GATE_SOURCE_FILES = ["scripts/check_structure.py", "scripts/check_commit_msg.py
 
 def check_gates_registry(root: Path, out: list[Finding]) -> None:
     """門の台帳（GATE_REGISTRY — §12.1 `dev.py gates`）と検査器コードの一致検査
-    （gates-registry-drift・hard — Phase 45・v2.43）。
+    （gates-registry-drift・hard — Phase 45・v2.43／gates-severity-drift・hard —
+    Phase 65・v2.64）。
 
     台帳は「何ができるか」の発見導線であり、検査器と食い違えば一覧が嘘をつく（G9）。
-    照合は2方向: ① 検査器が emit する規則ID（リテラル）が台帳に無い→未登録
+    ID の照合は2方向: ① 検査器が emit する規則ID（リテラル）が台帳に無い→未登録
     ② 台帳の強制対象区分（GATE_REGISTRY_ENFORCED）のIDがどのソースにも現れない→台帳が古い。
+
+    severity の照合（Phase 65——「(soft)」の散文宣言を構造化列へ昇格した相方）:
+    宣言 "-" なのに emit がある／emit された severity が宣言に無い／宣言した severity の
+    emit が（他の severity の emit はあるのに）見つからない、の3型を検出する。
+    **境界**: 変数IDで emit する規則（`REQUIRED_CONTENT_RULES` 経由の
+    agents-import-missing 等）はリテラル捕捉に掛からない——captured が空集合の行は
+    severity 照合をスキップする（ID 存在は上記②が別途守る。散文主張の真偽一般は §2e の
+    境界どおり対象外——照合できるのは判定列が書ける severity のみ）。
     """
     sources: dict[str, str] = {}
     for rel in _GATE_SOURCE_FILES:
@@ -156,11 +166,13 @@ def check_gates_registry(root: Path, out: list[Finding]) -> None:
             sources[rel] = rs.read_text(root, rel)
         except OSError:
             return  # ソース欠落は missing-required の持ち場（二重報告しない — G4）
-    emitted: set[str] = set()
+    pairs: dict[str, set[str]] = {}   # 規則ID → 実装が emit する severity 集合
     for rel in ("scripts/check_structure.py", "scripts/check_commit_msg.py"):
         for pat in _GATE_EMIT_PATTERNS:
-            emitted |= set(pat.findall(sources[rel]))
-    registry_ids = {gid for gid, _, _, _ in rs.GATE_REGISTRY}
+            for sev, gid in pat.findall(sources[rel]):
+                pairs.setdefault(gid, set()).add(sev)
+    emitted = set(pairs)
+    registry_ids = {gid for gid, _, _, _, _ in rs.GATE_REGISTRY}
     for gid in sorted(emitted - registry_ids):
         out.append(("HARD", "gates-registry-drift", gid,
                     "検査器が emit する規則IDが GATE_REGISTRY に未登録"
@@ -169,13 +181,30 @@ def check_gates_registry(root: Path, out: list[Finding]) -> None:
     # 「台帳にだけ書いた幽霊規則」と区別できない——**2回以上**（台帳の行＋実装側の実体）を
     # 要求する（自己循環の除去。Phase 45 の違反注入で実測した穴）。
     union = "\n".join(sources.values())
-    for gid, cat, _act, _desc in rs.GATE_REGISTRY:
-        if cat.split(" ", 1)[0] not in rs.GATE_REGISTRY_ENFORCED:
+    for gid, cat, _act, declared, _desc in rs.GATE_REGISTRY:
+        if cat.split(" ", 1)[0] in rs.GATE_REGISTRY_ENFORCED:
+            if gid not in emitted and union.count(gid) < 2:
+                out.append(("HARD", "gates-registry-drift", gid,
+                            "GATE_REGISTRY にあるが検査器コードのどこにも現れない"
+                            "（規則を消したなら台帳からも消す — §12.1 gates）"))
+        captured = pairs.get(gid, set())
+        if declared == "-":
+            if captured:
+                out.append(("HARD", "gates-severity-drift", gid,
+                            f"台帳は非emit（-）宣言だが実装が {'/'.join(sorted(captured))} で"
+                            " emit している（台帳の severity 宣言を実装に合わせる — §3.3）"))
             continue
-        if gid not in emitted and union.count(gid) < 2:
-            out.append(("HARD", "gates-registry-drift", gid,
-                        "GATE_REGISTRY にあるが検査器コードのどこにも現れない"
-                        "（規則を消したなら台帳からも消す — §12.1 gates）"))
+        if not captured:
+            continue  # 変数ID emit は捕捉不能（docstring の境界）
+        declared_set = set(declared.split("→"))
+        for sev in sorted(captured - declared_set):
+            out.append(("HARD", "gates-severity-drift", gid,
+                        f"実装が {sev} で emit しているが台帳の宣言（{declared}）に無い"
+                        "（宣言か実装のどちらかが嘘——一致させる — §3.3）"))
+        for sev in sorted(declared_set - captured):
+            out.append(("HARD", "gates-severity-drift", gid,
+                        f"台帳は {declared} 宣言だが {sev} の emit が実装に見つからない"
+                        "（宣言か実装のどちらかが嘘——一致させる — §3.3）"))
 
 
 def check_phase_table(root: Path, out: list[Finding]) -> None:

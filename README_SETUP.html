@@ -138,6 +138,18 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 </tr>
 </tbody>
 </table>
+<h2 id="v264-severity-guardrailsgoalsmd-g9g4g5">v2.64 での変更点（台帳severity宣言と実装の双方向照合を追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G5）</h2>
+<ul>
+<li>hard <code>gates-severity-drift</code> を追加した。<code>GATE_REGISTRY</code>（scripts/repo_scan.py）を
+  5タプル化して severity 宣言列（<code>HARD</code>/<code>SOFT</code>/<code>HARD→SOFT</code>/<code>-</code>）を持たせ、
+  検査器2本（check_structure / check_commit_msg）の実 emit と双方向照合する。従来 severity は
+  台帳の説明文中の「(soft)」という照合されない散文であり、採用先実測で露出した「散文の
+  契約主張と実装の乖離」の同型がキット自身の台帳に残っていた。<code>dev.py gates</code> の
+  一覧にも severity 列を表示する。</li>
+<li>§3.3 の規則追加レシピへ「判定列が書ける契約主張は散文でなく台帳の構造化列へ昇格させる」を
+  追記した。設計判断は docs/plans/2026-08-05-gate-severity-contract.md、DoD（宣言反転2型の
+  注入→発火→除去→沈黙）は .guardrails/GUARDRAILS.md Phase 65 に記録。</li>
+</ul>
 <h2 id="v262-htmlhtml-guardrailsgoalsmd-g3">v2.62 での変更点（人間向け文書のHTML化規約を追加し、本書自体をHTML化。根拠は <code>.guardrails/GOALS.md</code> の G3、機械検査は追加せず）</h2>
 <ul>
 <li><strong>文書の書式規約を新設</strong>（AGENTS.md §4・.guardrails/GUARDRAILS.md §6）: 人間だけが読む文書
