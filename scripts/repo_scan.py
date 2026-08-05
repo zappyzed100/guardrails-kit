@@ -726,6 +726,15 @@ REQUIRED_SOFT_PATHS: list[str] = []
 CHRONIC_SOFT_RULES = frozenset({"file-too-long", "dir-too-crowded"})
 CHRONIC_SOFT_THRESHOLD = 5
 
+# --- soft 警告の規則ID別ラチェット（§3.3 soft-ratchet-exceeded — v2.65・Phase 66）---
+# chronic-soft-violation が「同一箇所の慢性化」をローカル台帳で見るのに対し、こちらは
+# 「規則IDごとの総量の漸増」を git 追跡のベースラインで見る（CI・新規 clone でも効く）。
+# ベースラインの生成・更新は `dev.py ratchet` が唯一の主体（手編集しない——
+# generate_structure.py と同型の「生成物だが追跡する」運用）。ラチェット自身の警告は
+# 集計から除外する（自己参照の禁止）。
+SOFT_BASELINE_REL = ".guardrails/soft_baseline.json"
+SOFT_RATCHET_SELF = frozenset({"soft-ratchet-exceeded", "soft-ratchet-unbaselined"})
+
 # --- シンボル抽出の言語ディスパッチ（表A: 公開シンボル抽出。列充填。実装は中盤）---
 # 例: {".dart": _dart_public_symbols, ".rs": _rust_public_symbols,
 #      ".ts": _ts_public_symbols, ".tsx": _ts_public_symbols, ".py": _py_public_symbols}
@@ -814,6 +823,10 @@ GATE_REGISTRY: list[tuple[str, str, str, str, str]] = [
     ("dir-too-crowded", "§3.3 コミット時", "always", "SOFT", "1フォルダ7ファイル超の警告（soft）"),
     ("chronic-soft-violation", "§3.3 コミット時", "always", "SOFT",
      "同一箇所の file-too-long/dir-too-crowded が複数回の実行にまたがって慢性化（soft・ローカル違反ログ §3.6 が土台）"),
+    ("soft-ratchet-exceeded", "§3.3 コミット時", "always", "SOFT",
+     "soft警告の規則ID別件数がベースライン（soft_baseline.json）を超過——総量漸増の可視化"),
+    ("soft-ratchet-unbaselined", "§3.3 コミット時", "always", "SOFT",
+     "ベースライン未生成の注意喚起（dev.py ratchet で生成・追跡——見える猶予）"),
     ("missing-role-header", "§3.3 コミット時", "var:HEADER_REQUIRED_EXTS", "SOFT",
      "役割一行ヘッダーの欠落警告（soft）"),
     ("missing-folder-claude-md", "§3.3 コミット時", "var:REQUIRED_SOFT_PATHS", "SOFT",

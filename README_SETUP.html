@@ -138,6 +138,20 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 </tr>
 </tbody>
 </table>
+<h2 id="v265-soft-guardrailsgoalsmd-g9g4g2">v2.65 での変更点（soft警告の規則ID別ラチェットを追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G2）</h2>
+<ul>
+<li>soft <code>soft-ratchet-exceeded</code> / <code>soft-ratchet-unbaselined</code> を追加した。
+  追跡ファイル <code>.guardrails/soft_baseline.json</code>（生成・更新は新動詞
+  <code>dev.py ratchet</code> が唯一の主体）に規則IDごとの許容件数を持ち、超過を
+  <code>m→n 件に増加</code> の差分形式で警告する。採用先実測で soft 警告164件が正常化ノイズと
+  化した「総量の漸増」経路を CI でも見える形で塞ぐ——<code>chronic-soft-violation</code>
+  （同一箇所×ローカル台帳）と直交する第2軸。意図的な増加はベースライン引き上げの差分を
+  同一コミットに同梱して通す（守りが緩む方向の変更を diff に可視化）。</li>
+<li>ベースラインはリポジトリ固有の実測値のため導入先には配布しない（install_kit.py の
+  META_FILES へ追加——導入先は unbaselined の警告から <code>ratchet</code> 実行が正規経路）。
+  soft 導入の判断（運用摩擦が未実測）・DoD（コーパス1ケース＋手動注入4型）は
+  .guardrails/GUARDRAILS.md Phase 66 に記録。設計判断は docs/plans/2026-08-05-soft-ratchet.md。</li>
+</ul>
 <h2 id="v264-severity-guardrailsgoalsmd-g9g4g5">v2.64 での変更点（台帳severity宣言と実装の双方向照合を追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G5）</h2>
 <ul>
 <li>hard <code>gates-severity-drift</code> を追加した。<code>GATE_REGISTRY</code>（scripts/repo_scan.py）を

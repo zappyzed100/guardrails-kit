@@ -58,6 +58,10 @@ META_FILES = {
     "PROMPT_claude_code.md",
     "PROMPT_claude_code_existing.md",
     ".guardrails-kit-source",  # キット原本判定マーカー（§3.3 kit-source-exempt）。導入先には複製しない
+    # soft ラチェットのベースライン（§3.3 soft-ratchet-exceeded — Phase 66）はリポジトリ固有の
+    # 実測値——原本の値を配ると導入先で「最初から嘘の台帳」になる（見えない過大枠 or 偽超過）。
+    # 導入先は SOFT:soft-ratchet-unbaselined（見える猶予）→ `dev.py ratchet` で自分の値を生成する。
+    ".guardrails/soft_baseline.json",
 }
 
 

@@ -82,7 +82,37 @@ VERB_HELP: dict[str, str] = {
     "dod": "列の違反注入コーパスを再生する（規則DoDの機械化 — Phase 47）",
     "doctor": "環境診断（ツール・シム・フック配線の集約表示 → check を実行）",
     "gates": "門と機能の全一覧を実状態つきで表示する（発見の導線 — §12.1）",
+    "ratchet": "soft警告の規則ID別ベースラインを現在の実測値で生成/更新する（§3.3 soft-ratchet）",
 }
+
+
+def _ratchet(root: Path) -> int:
+    """soft 警告の規則ID別ベースライン（rs.SOFT_BASELINE_REL）を現在の実測値で生成・更新
+    する（§3.3 soft-ratchet-exceeded — Phase 66）。**書き出しの唯一の主体**——手編集も
+    検査器（check_structure）による自動書き換えもしない（検査のたびに diff が動く台帳は
+    台帳でなくなる。generate_structure.py と同型の「生成物だが追跡する」運用）。
+
+    引き上げ（守りが緩む方向）はこのコマンドの差分を violation 解消コミットと**同一
+    コミット**に同梱して理由を diff に残す（GOALS「降格の統治」と同じ非対称——§3.3）。"""
+    import check_structure as cs
+    counts: dict[str, int] = {}
+    for sev, rule, *_ in cs.collect_findings(root):
+        if sev == "SOFT" and rule not in rs.SOFT_RATCHET_SELF:
+            counts[rule] = counts.get(rule, 0) + 1
+    path = root / rs.SOFT_BASELINE_REL
+    payload = json.dumps(dict(sorted(counts.items())), ensure_ascii=False, indent=2) + "\n"
+    old = path.read_text(encoding="utf-8") if path.is_file() else None
+    if old == payload:
+        print(f"[dev] ratchet: {rs.SOFT_BASELINE_REL} 変更なし"
+              f"（規則 {len(counts)} 種・計 {sum(counts.values())} 件）")
+        return 0
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(payload)
+    print(f"[dev] ratchet: {rs.SOFT_BASELINE_REL} を{'更新' if old is not None else '生成'}した"
+          f"（規則 {len(counts)} 種・計 {sum(counts.values())} 件）")
+    print("[dev] ratchet: 引き上げ（守りが緩む方向）はこの差分を同一コミットへ同梱して"
+          "理由を残す（§3.3 soft-ratchet-exceeded）")
+    return 0
 
 
 def _gates(root: Path) -> int:
@@ -218,6 +248,7 @@ def _print_verbs() -> None:
         print(f"  {verb:<8} {wired:<4}  {VERB_HELP.get(verb, '')}")
     print(f"  {'doctor':<8} 内蔵    {VERB_HELP['doctor']}")
     print(f"  {'gates':<8} 内蔵    {VERB_HELP['gates']}")
+    print(f"  {'ratchet':<8} 内蔵    {VERB_HELP['ratchet']}")
 
 
 def main(argv: list[str]) -> int:
@@ -230,6 +261,8 @@ def main(argv: list[str]) -> int:
         return _doctor(rs.repo_root())
     if verb == "gates":
         return _gates(rs.repo_root())
+    if verb == "ratchet":
+        return _ratchet(rs.repo_root())
     if verb == "probe" and args == ["--live"]:
         return _probe_live(rs.repo_root())
     if verb not in COMMANDS:

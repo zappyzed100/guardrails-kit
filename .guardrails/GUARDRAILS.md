@@ -552,6 +552,21 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   無く不発（`binding-unstamped` と同じ「見える猶予」）。**違反注入コーパス対象外**
   （`tests/injections/`）: 複数回の実行履歴の蓄積が前提であり、ランナーは1ケースを
   単発追加して1回実行する設計のため再現できない（§3.3 冒頭のレシピ③注記）。
+- ✅ `soft-ratchet-exceeded` — soft 警告の**規則ID別件数**が追跡ベースライン
+  （`.guardrails/soft_baseline.json`——生成・更新は `dev.py ratchet` が唯一の主体・
+  手編集しない）を超過（v2.65・Phase 66）。`chronic-soft-violation` が「同一箇所の
+  慢性化×ローカル台帳（CI不発）」を見るのに対し、こちらは「総量の漸増×git 追跡
+  （CI でも効く）」——採用先実測で soft 164件が正常化ノイズと化した「ゆでガエル」経路を
+  塞ぐ直交軸（重複登録ではない — G5。設計判断は docs/plans/2026-08-05-soft-ratchet.md）。
+  規則IDごとに1行・`m→n 件に増加` の差分形式で出す（G4）。意図的な増加は同一コミットに
+  `dev.py ratchet` の差分を同梱して通す＝守りが緩む方向の変更を diff に可視化
+  （GOALS「降格の統治」と同じ非対称）。件数の減少は finding にせず情報行で引き下げを促す。
+  限界の明記: 箇所の入れ替わり（1件解消＋1件新規＝横ばい）には盲目——箇所単位は
+  `chronic-soft-violation` の持ち場（G9/G4）
+- ✅ `soft-ratchet-unbaselined` — ベースライン未生成/解釈不能の注意喚起（`dev.py ratchet`
+  で生成・追跡する——`binding-unstamped` と同じ「見える猶予」。キット原本は実測値で
+  充填済みを同梱するが、値はリポジトリ固有のため**導入先には配布しない**
+  （`install_kit.py` META_FILES）——導入先はこの警告→ `ratchet` 実行が正規経路）
 
 **出荷状態の想定出力**: v2キットを配置した直後の `check` は
 `HARD:missing-required AGENTS.md`・`HARD:missing-required CLAUDE.md`・
@@ -1357,6 +1372,7 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 | 63 | 慢性化したsoft違反の検出 `chronic-soft-violation`（関心事分割の放置歯止め） | §3.3 §3.6 | ✅（v2.61 同梱） |
 | 64 | doc影響の未申告検出 `doc-impact-undeclared`（soft 導入・列充填。ソース⇔doc対応表） | §3.4 検査9・bindings/catalog.md | ✅（v2.63 同梱） |
 | 65 | 台帳severity宣言と実装の双方向照合 `gates-severity-drift`（散文の契約主張の構造化列昇格） | §3.3・§12.1 gates | ✅（v2.64 同梱） |
+| 66 | soft警告の規則ID別ラチェット `soft-ratchet-exceeded`（総量漸増の可視化・`dev.py ratchet`） | §3.3・§12.1 | ✅（v2.65 同梱） |
 
 ### Phase 1 — Python(uv) 移植 ✅（v2キットに同梱済み）
 - `.python-version`・`scripts/repo_scan.py`・`generate_structure.py`・`check_structure.py`
@@ -2490,6 +2506,43 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
   ②`mcp-unparseable` を `-` へ反転 → 「非emit宣言だが SOFT で emit」で exit 1
   ③除去 → 沈黙（exit 0・全68行の宣言が実装と一致）。
 
+### Phase 66 — v2.65 同梱 ✅（soft警告の規則ID別ラチェット `soft-ratchet-exceeded`）（G9/G4/G2）
+
+- 発端: 採用先リポジトリの実測で **soft 警告 164 件が正常化したノイズ**になった。soft の
+  設計前提「1回の見送りは可・無理由の放置は歯止めが塞ぐ」に対し、既存の歯止め
+  `chronic-soft-violation`（Phase 63）は①対象2規則・箇所単位 ②ローカル台帳依存で
+  CI・新規 clone では不発——「1件ずつ増えて総量が漸増する」経路をどの門も見ていなかった。
+  設計判断は docs/plans/2026-08-05-soft-ratchet.md。
+- 検討2案: グローバル総量上限（1閾値）は領域を跨いだ相殺（ある規則の解消が別の規則の
+  増加を隠す——164のまま中身が入れ替わる）を許すため不採用。**規則ID別ラチェット**を採用
+  ——警告1行が「どの規律が緩んでいるか」を規則IDでそのまま指す（G4）。
+- 実装: 追跡ファイル `.guardrails/soft_baseline.json`（`{"規則ID": 許容件数}` の平坦辞書）
+  ＋ `dev.py ratchet`（生成・更新の**唯一の主体**——手編集も検査器による自動書き換えも
+  しない。検査のたびに diff が動く台帳は台帳でなくなる）＋ `check_structure` 末尾の
+  `check_soft_ratchet`（全 soft 検査の後という順序契約——chronic と同じく collect が保証）。
+  超過 = `SOFT:soft-ratchet-exceeded`（規則IDごと1行・`m→n` の差分形式）、
+  未生成/解釈不能 = `SOFT:soft-ratchet-unbaselined`（見える猶予・壊れた台帳で静かに
+  不発にしない）、減少 = finding にせず情報行（引き下げ忘れは次の増加を隠す余白——黙らない）。
+- 配布の判断: ベースラインは**リポジトリ固有の実測値**のため導入先に配布しない
+  （`install_kit.py` META_FILES へ追加）。原本の値を配ると導入先で最初から嘘の台帳になる
+  （見えない過大枠 or 偽超過）——doc-impact の存在ガード（Phase 64）と同族の「原本では
+  生きる・導入先では正規経路（unbaselined → ratchet）へ倒す」形。キット原本自身は
+  実測値（3規則・計3件——§3.3 出荷状態の想定 SOFT）で充填済みを同梱する。
+  副作用の明記: pre-commit 未導入のローカル新規 clone では `hooks-not-installed`（CI では
+  スキップされる soft）が一時的に超過警告を出す——Step 3 の `pre-commit install` で解消する
+  一時状態であり、見える猶予と同じ扱い。
+- **soft 導入**（hard にしない理由）: 比較自体は決定的だが、運用摩擦（正当な増加の頻度・
+  ベースライン更新の儀式化リスク）が未実測——非対称閾値②（前例 feat-without-plan）に従い、
+  違反ログ（§3.6）の計数で実測してから hard 昇格を判断する。
+- 意図的な増加の正規経路: 違反を残す判断をしたコミットに `dev.py ratchet` の差分を同梱する
+  ＝守りが緩む方向の変更が diff とレビューに必ず現れる（GOALS「降格の統治」と同じ非対称）。
+- DoD（実測済み 2026-08-05）: ①コーパス（common.json へ `soft-ratchet-exceeded` 1ケース
+  ——7ファイル超のディレクトリ注入で dir-too-crowded を 0→1 に増やし超過を誘発）
+  DOD:PASS・除去後沈黙 ②ベースライン不在 → unbaselined 発火 ③解釈不能 JSON →
+  unbaselined（解釈不能）発火 ④実測より高い値 → 減少情報行 ⑤復元 → 沈黙 exit 0。
+  `soft-ratchet-unbaselined` 自体はコーパス対象外（原本にベースライン同梱済み＝注入先が
+  既存で SKIP(exists)——除去・改変系①の分類。手動 DoD ②③が持ち場）。
+
 ### 保留（トリガー待ち。トリガー成立まで実装しない——ここが登録先）
 - **免除・接頭辞の監査指標**（G4——v2.35 登録）: レビュー規約に割り当て済みの乱用点検
   （`RED-FIRST-EXEMPT:` / `NO-LOG:` / `NONDETERMINISM-EXEMPT:` の頻度・fix を refactor/chore
@@ -2926,7 +2979,9 @@ Step 1 と Step 10 の grep 検査の入力になる。
 - **`scripts/dev.py` が全プロジェクト共通の動詞**を提供する:
   `up` / `reset` / `seed` / `time` / `test` / `e2e` / `fmt` / `check` / `probe` / `db` /
   `selftest` / `doctor`（v2.42・Phase 44）/ `gates`（v2.43・Phase 45）/
-  `dod`（v2.45・Phase 47——列の違反注入コーパス再生。§11 Step 0）。
+  `dod`（v2.45・Phase 47——列の違反注入コーパス再生。§11 Step 0）/
+  `ratchet`（v2.65・Phase 66——soft ベースラインの生成・更新の唯一の主体。§3.3
+  `soft-ratchet-exceeded`）。
   **`gates` は「このキットが何をできるか」への正規の入口**——門の台帳
   （`repo_scan.py` の `GATE_REGISTRY`）を、このリポジトリでの実状態
   （常時有効／充填済み／未充填／配線済み）つきで一覧表示する。手書きの機能一覧を

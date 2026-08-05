@@ -48,6 +48,7 @@
 - `.guardrails/CUSTOMIZE.md`
 - `.guardrails/GOALS.md`
 - `.guardrails/GUARDRAILS.md`
+- `.guardrails/soft_baseline.json`
 
 ## `bindings/`
 
@@ -258,6 +259,8 @@
 - def check_soft_limits
 - def check_chronic_soft_violations
 - def check_orphans
+- def check_soft_ratchet
+- def collect_findings
 - def main
 
 ### `scripts/check_workflow_integrity.py`

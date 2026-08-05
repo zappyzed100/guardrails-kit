@@ -746,9 +746,65 @@ def check_orphans(root: Path, files: list[str], texts: dict[str, str], out: list
                             "どこからも import / mod されていない孤立ファイル"))
 
 
-def main() -> int:
-    rs.reconfigure_stdio()
-    root = rs.repo_root()
+def check_soft_ratchet(root: Path, tracked: set[str], out: list[Finding]) -> None:
+    """soft 警告の規則ID別ラチェット（soft `soft-ratchet-exceeded` — Phase 66・v2.65）。
+
+    soft の設計前提「1回の見送りは可・放置は歯止めが塞ぐ」のうち、既存の歯止め
+    `chronic-soft-violation` は同一箇所×ローカル台帳（CI・新規 clone では不発）。
+    こちらは**規則IDごとの総量**を git 追跡のベースライン（`SOFT_BASELINE_REL`——
+    生成・更新は `dev.py ratchet` が唯一の主体）と比較し、1件ずつの漸増が正常化する
+    経路（採用先実測: soft 164件のノイズ化）を CI でも見える形で塞ぐ——直交する2軸
+    （箇所の慢性化×総量の漸増）であり重複登録ではない（G5）。
+
+    意図的な増加は `dev.py ratchet` による引き上げを**同一コミットに同梱**して通す——
+    守りが緩む方向の変更を diff とレビューに可視化する（GOALS「降格の統治」と同じ
+    非対称）。グローバル総量上限にしない理由: 領域を跨いだ相殺（ある規則の解消が別の
+    規則の増加を隠す）を許すため（設計判断は docs/plans/2026-08-05-soft-ratchet.md）。
+
+    呼び出し順の契約: **全 soft 検査の後**（`out` が当回の全 soft findings を持つ——
+    chronic-soft-violation と同じく main()/collect_findings() が順序を保証する）。
+    ラチェット自身の警告は集計から除外する（SOFT_RATCHET_SELF——自己参照の禁止）。
+    """
+    counts: dict[str, int] = {}
+    for sev, rule, *_ in out:
+        if sev == "SOFT" and rule not in rs.SOFT_RATCHET_SELF:
+            counts[rule] = counts.get(rule, 0) + 1
+    if rs.SOFT_BASELINE_REL not in tracked:
+        out.append(("SOFT", "soft-ratchet-unbaselined", rs.SOFT_BASELINE_REL,
+                    "soft警告のベースラインが未生成（`uv run scripts/dev.py ratchet` で生成し"
+                    "追跡する——binding-unstamped と同じ「見える猶予」・不発を静かにしない — §3.3）"))
+        return
+    try:
+        baseline = json.loads(rs.read_text(root, rs.SOFT_BASELINE_REL))
+        if not isinstance(baseline, dict):
+            raise ValueError("top-level が dict でない")
+    except (OSError, ValueError):
+        out.append(("SOFT", "soft-ratchet-unbaselined", rs.SOFT_BASELINE_REL,
+                    "ベースラインが読めない/解釈不能（`uv run scripts/dev.py ratchet` で"
+                    "再生成する——壊れた台帳での静かな不発にしない — §3.3・G9）"))
+        return
+    for rule in sorted(set(counts) | set(baseline)):
+        try:
+            allowed = int(baseline.get(rule, 0))
+        except (TypeError, ValueError):
+            allowed = 0
+        n = counts.get(rule, 0)
+        if n > allowed:
+            out.append(("SOFT", "soft-ratchet-exceeded", rule,
+                        f"soft警告が {allowed}→{n} 件に増加（ベースライン超過）。違反を解消"
+                        "するか、意図的な増加なら同一コミットで `dev.py ratchet` の差分を"
+                        "同梱して理由を残す（§3.3）"))
+        elif n < allowed:
+            # 違反ではないため finding にしない（減少は良い方向）。ただし黙らない——
+            # ベースラインの引き下げ忘れは次の増加を隠す余白になる（G9）。
+            print(f"[soft-ratchet] {rule}: {allowed}→{n} 件に減少——"
+                  "`uv run scripts/dev.py ratchet` でベースラインを引き下げる（§3.3）",
+                  file=sys.stderr)
+
+
+def collect_findings(root: Path) -> list[Finding]:
+    """全検査を実行して findings を返す（main と `dev.py ratchet` の共通土台 — Phase 66。
+    違反ログへの記録・exit 判定は main の責務——ここは収集のみ）。"""
     files = rs.list_tracked_files(root)
     tracked = set(files)
 
@@ -786,6 +842,14 @@ def main() -> int:
     check_soft_limits(files, texts, findings)
     check_chronic_soft_violations(root, findings)
     check_orphans(root, files, texts, findings)
+    check_soft_ratchet(root, tracked, findings)   # 全 soft の後（docstring の順序契約）
+    return findings
+
+
+def main() -> int:
+    rs.reconfigure_stdio()
+    root = rs.repo_root()
+    findings = collect_findings(root)
 
     for sev, rule, loc, msg in findings:
         print(f"{sev}:{rule} {loc} {msg}", file=sys.stderr)
