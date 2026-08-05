@@ -513,6 +513,17 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   キットのフックを機械判別できないため原本側で堰き止める（kit-source-exempt と対称）
 
 **soft（警告のみ・コミットは通る）**:
+- （列充填で有効化）`scan-without-floor` — **走査型テストの空定義域**（v2.66・Phase 67）:
+  テストファイル内にディレクトリ走査呼び出し（`SCAN_CALL_PATTERNS`——4同梱列は既定値
+  充填済み）があるのに、件数下限/実測ピンとみなせる assert（`SCAN_FLOOR_PATTERNS`）も
+  `SCAN-FLOOR-EXEMPT: 理由` も同一ファイルに無い。「空集合の上の緑」（走査対象が0件に
+  なってもテストが空虚に合格し続ける——採用先実測: fixture 走査が CWD 解決ミスで恒久0件
+  走査となり、是正の瞬間に16件の登録漏れが噴出）の検出。`binding-dead-pattern` /
+  `binding-dead-path` がバインディング変数の定義域空化を守るのに対し、テストコード自身の
+  走査ループという未被覆だった同族を塞ぐ（G9。設計判断は
+  docs/plans/2026-08-05-scan-floor-assert.md）。判定はファイル単位・警告は最初の走査行に
+  1件。下限が守るのは「0件で緑にならない」まで——実測件数の**等値ピン**が上位互換
+  （強制せず推奨——カタログ注記。免除は存在検査のみ・NO-LOG: と同じ境界）
 - ✅ 1ファイル500行超
 - ✅ 1フォルダに `CLAUDE.md` 以外で7ファイル超（`scripts/` は例外で無制限）
 - ✅ ファイル先頭の役割一行ヘッダー未記述・形式不正
@@ -1373,6 +1384,7 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
 | 64 | doc影響の未申告検出 `doc-impact-undeclared`（soft 導入・列充填。ソース⇔doc対応表） | §3.4 検査9・bindings/catalog.md | ✅（v2.63 同梱） |
 | 65 | 台帳severity宣言と実装の双方向照合 `gates-severity-drift`（散文の契約主張の構造化列昇格） | §3.3・§12.1 gates | ✅（v2.64 同梱） |
 | 66 | soft警告の規則ID別ラチェット `soft-ratchet-exceeded`（総量漸増の可視化・`dev.py ratchet`） | §3.3・§12.1 | ✅（v2.65 同梱） |
+| 67 | 走査型テストの空定義域検出 `scan-without-floor`（soft・列充填。4同梱列に既定値） | §3.3・bindings/catalog.md | ✅（v2.66 同梱） |
 
 ### Phase 1 — Python(uv) 移植 ✅（v2キットに同梱済み）
 - `.python-version`・`scripts/repo_scan.py`・`generate_structure.py`・`check_structure.py`
@@ -2542,6 +2554,40 @@ LLM の実装セッションは、省略・先送り・自己申告完了に流�
   unbaselined（解釈不能）発火 ④実測より高い値 → 減少情報行 ⑤復元 → 沈黙 exit 0。
   `soft-ratchet-unbaselined` 自体はコーパス対象外（原本にベースライン同梱済み＝注入先が
   既存で SKIP(exists)——除去・改変系①の分類。手動 DoD ②③が持ち場）。
+
+### Phase 67 — v2.66 同梱 ✅（走査型テストの空定義域検出 `scan-without-floor`）（G9/G7/G13）
+
+- 発端: 採用先リポジトリの実測で最大の教訓となった「**空集合の上の緑**」——fixture 走査型
+  テストが CWD 解決ミスで恒久的に0ファイル走査＝空虚に合格し続け、走査を直した瞬間に
+  16件の登録漏れが噴出した。採用先の規約文書には「登録≠実行」の罠として類例が3件記録済み
+  だったのに再発した＝**心得では防げない型**（門 > 心得）。既存の `binding-dead-pattern` /
+  `binding-dead-path` はバインディング変数の定義域空化しか守っておらず、テストコード自身の
+  走査ループは同族の未被覆領域だった。設計判断は docs/plans/2026-08-05-scan-floor-assert.md。
+- 検討2案: 実行時計測（テストランナーをラップして走査件数を実測）は正確だが、キットは
+  テスト実行系を持たずランナー非依存に作れない（G13違反）——不採用。**静的存在検査**を採用:
+  走査呼び出し（`SCAN_CALL_PATTERNS`）を含むテストファイルに、件数下限/実測ピンとみなせる
+  assert（`SCAN_FLOOR_PATTERNS`）か `SCAN-FLOOR-EXEMPT: 理由` を要求する。存在検査のみ・
+  assert の質は検査しない（NO-LOG: / RED-FIRST-EXEMPT: と同じ境界）。
+- 実装: 列充填の2変数＋`check_scan_floor`（ファイル単位判定・警告は最初の走査行に1件——
+  行近傍への厳密化は採用先の偽陽性実測後 §7.4）。両変数は `binding-dead-pattern` の照合
+  対象に追加（充填時の拡張子取りこぼし＝この検査自身の静かな不発も既存の門が守る）。
+  **4同梱列に既定値を定義して出荷**（python: glob/rglob/iterdir/listdir/walk/scandir、
+  ts: readdirSync/globby/fast-glob、rust: read_dir/glob、dart: Directory.list/listSync——
+  走査 API は言語固有＝列の性質のため repo_scan の中立既定値ではなく列で持つ。
+  キット原本自身は未充填のまま＝`var:` 型の「見える猶予」で `dev.py gates` に表示される）。
+- **soft 導入**（hard にしない理由）: 走査 API パターンの網羅性・floor 判定の偽陽性率は
+  採用先の実測でしか検証できない（非対称閾値②。前例 feat-without-plan）。
+- 対象外の明記: ①「意図した部分集合を走査しているか」は判定不能——16件の登録漏れその
+  ものを塞ぐのは**等値ピン**（実測件数の == 固定）であり、等値は仕様変更のたびの更新が
+  要るため強制せずカタログ注記の推奨に留める（下限の強制は「0件で緑」の封鎖まで）
+  ②キット自身の検査器（`scripts/check_*.py`——`is_test_file` 対象外）は probe / 実測ピンの
+  慣行が既にあり対象外（重複させない — G5）。
+- DoD（実測済み 2026-08-05・作業ツリーのコピー上で fill 一時適用）: 4列すべてで
+  `fill_bindings <列>@新版` → `check_rule_dod <列>` を実行し、`scan-without-floor` ケース
+  DOD:PASS＋全ケース FAIL 0（python-uv@12: 20ケース／ts-react-web@14: 17ケース／
+  dart-flutter@10: 14ケース／rust@11: 17ケース）。抑制側も実測: 下限 assert あり→沈黙・
+  `SCAN-FLOOR-EXEMPT:` あり→沈黙。コーパスは4列 json へ `requires` 付きで同梱
+  （未充填リポジトリでは SKIP(unfilled) 表示——不発を PASS と偽らない G9）。
 
 ### 保留（トリガー待ち。トリガー成立まで実装しない——ここが登録先）
 - **免除・接頭辞の監査指標**（G4——v2.35 登録）: レビュー規約に割り当て済みの乱用点検

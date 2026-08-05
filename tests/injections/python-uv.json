@@ -93,6 +93,15 @@
       "severity": "SOFT",
       "path": "src/dod_probe_hdr.py",
       "content": "X = 1\n"
+    },
+    {
+      "rule": "scan-without-floor",
+      "severity": "SOFT",
+      "requires": [
+        "SCAN_CALL_PATTERNS"
+      ],
+      "path": "tests/dod_probe_scan_test.py",
+      "content": "# dod_probe_scan_test.py — DoD注入（自動生成・自動削除）\nfrom pathlib import Path\n\n\ndef test_scan_fixtures():\n    for p in Path(\"fixtures\").glob(\"*.json\"):\n        assert p.name\n"
     }
   ]
 }

@@ -106,6 +106,6 @@ scripts/install_kit.py         対象リポジトリへ配置（INSTALLED/MERGED
 - [ ] 初回gitタグの切り出しとRelease公開 `next`
 - [ ] 免除・接頭辞（RED-FIRST-EXEMPT等）の乱用点検指標スクリプト `backlog`
 - [ ] 効果の評価設計（hard違反率・soft無視率・免除率・fix再発率の計測） `backlog`
-- [ ] 走査型テストの空定義域検出 `scan-without-floor`（docs/plans/2026-08-05-scan-floor-assert.md） `backlog`
+- [x] 走査型テストの空定義域検出 `scan-without-floor`（docs/plans/2026-08-05-scan-floor-assert.md）
 - [x] 台帳severity宣言と実装の双方向照合 `gates-severity-drift`（docs/plans/2026-08-05-gate-severity-contract.md）
 - [x] soft警告の規則ID別ラチェット `soft-ratchet-exceeded`（docs/plans/2026-08-05-soft-ratchet.md）

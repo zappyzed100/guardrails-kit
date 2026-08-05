@@ -138,6 +138,19 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 </tr>
 </tbody>
 </table>
+<h2 id="v266-scan-guardrailsgoalsmd-g9g7g13">v2.66 での変更点（走査型テストの空定義域検出を追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G7/G13）</h2>
+<ul>
+<li>soft <code>scan-without-floor</code> を追加した（列充填——4同梱列に既定値を定義して出荷）。
+  テストファイル内にディレクトリ走査呼び出しがあるのに、件数下限/実測ピンとみなせる assert も
+  <code>SCAN-FLOOR-EXEMPT: 理由</code> も無い状態を警告する。採用先実測で fixture 走査テストが
+  CWD 解決ミスにより恒久0件走査＝空虚に合格し続けた「空集合の上の緑」への対策——
+  <code>binding-dead-pattern</code>/<code>binding-dead-path</code> が守るバインディング定義域の外
+  （テストコード自身の走査ループ）を塞ぐ。実測件数の等値ピンが上位互換（強制せず推奨）。</li>
+<li>4列（ts-react-web@14 / python-uv@12 / dart-flutter@10 / rust@11）へ paste-block と
+  違反注入コーパス1ケースずつ（<code>requires</code> 付き）を追加し、fill 一時適用で全列
+  DOD:PASS・抑制2型（下限あり/免除あり→沈黙）を実測した。詳細は .guardrails/GUARDRAILS.md
+  Phase 67、設計判断は docs/plans/2026-08-05-scan-floor-assert.md。</li>
+</ul>
 <h2 id="v265-soft-guardrailsgoalsmd-g9g4g2">v2.65 での変更点（soft警告の規則ID別ラチェットを追加。根拠は <code>.guardrails/GOALS.md</code> の G9/G4/G2）</h2>
 <ul>
 <li>soft <code>soft-ratchet-exceeded</code> / <code>soft-ratchet-unbaselined</code> を追加した。

@@ -239,6 +239,7 @@
 - def check_layers
 - def check_required_content
 - def check_tests
+- def check_scan_floor
 - def check_gates_registry
 - def check_phase_table
 - def check_codeowners_source_template

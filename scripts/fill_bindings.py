@@ -6,8 +6,8 @@ paste-block をコピーして貼る」を機械化する（コピペは決定�
 
 使い方（対象リポジトリのルートで）:
     uv run scripts/fill_bindings.py <列ID@版> [<列ID@版>...] [--dry-run]
-例: uv run scripts/fill_bindings.py python-uv@11
-    uv run scripts/fill_bindings.py dart-flutter@9 rust@10   # 併用（加算形が前提）
+例: uv run scripts/fill_bindings.py python-uv@12
+    uv run scripts/fill_bindings.py dart-flutter@10 rust@11   # 併用（加算形が前提）
 
 動作:
 - bindings/catalog.md の `## 列: <ID>@<版>` 節から `<!-- FILL <対象パス> -->` マーカー

@@ -133,6 +133,43 @@ def check_tests(texts: dict[str, str], out: list[Finding]) -> None:
                                     f"{label}。テストは {rs.SOLVER_TEST_WRAPPER_NAME} 経由のみ（§9.1）"))
 
 
+def check_scan_floor(texts: dict[str, str], out: list[Finding]) -> None:
+    """走査型テストの件数下限（soft `scan-without-floor` — Phase 67・v2.66・§3.3）。
+
+    採用先実測: fixture 走査テストが CWD 解決ミスで恒久的に0ファイル走査＝空虚に合格し、
+    走査を直した瞬間に16件の登録漏れが噴出した——「空集合の上の緑」。バインディング変数の
+    定義域空化は binding-dead-pattern / binding-dead-path が守るが、テストコード自身の
+    走査ループは未被覆だった同族の fail-open（G9）。心得の記録では再発を防げなかったため
+    門へ昇格（設計判断は docs/plans/2026-08-05-scan-floor-assert.md）。
+
+    判定はファイル単位・警告は最初の走査呼び出し行に1件のみ（G4 の1違反1行と、同一
+    ファイル内の複数走査で鳴りすぎない折衷）。floor は「件数下限か実測ピンとみなせる
+    assert がファイル内のどこかにある」の存在検査のみ——質は検査しない。
+    """
+    if not rs.SCAN_CALL_PATTERNS:
+        return
+    for rel, text in texts.items():
+        if not rs.is_test_file(rel):
+            continue
+        ext = rs.ext_of(rel)
+        pats = rs.SCAN_CALL_PATTERNS.get(ext)
+        if not pats:
+            continue
+        if rs.SCAN_FLOOR_EXEMPT_PATTERN.search(text):
+            continue
+        if any(p.search(text) for p in rs.SCAN_FLOOR_PATTERNS.get(ext, [])):
+            continue
+        for i, line in _iter_code_lines(ext, text):
+            label = next((lb for pat, lb in pats if pat.search(line)), None)
+            if label:
+                out.append(("SOFT", "scan-without-floor", f"{rel}:{i}",
+                            f"走査呼び出し（{label}）があるのに件数下限の assert が同一ファイル"
+                            "に無い——走査対象が空集合になっても緑のまま（0件走査の空虚な合格）。"
+                            "実測件数の等値ピンか下限 assert を足す"
+                            "（免除は `SCAN-FLOOR-EXEMPT: 理由` — §3.3）"))
+                break  # ファイル単位で1警告
+
+
 # 捕捉は (severity, 規則ID) の対（v2.64・Phase 65——ID だけでなく severity も照合する）
 _GATE_EMIT_PATTERNS = [
     re.compile(r'\("(HARD|SOFT)",\s*"([a-z0-9-]+)"'),   # check_structure の out.append 形
@@ -521,6 +558,8 @@ def check_binding_dead_patterns(out: list[Finding]) -> None:
     for name, table in (("SLEEP_PATTERNS", rs.SLEEP_PATTERNS),
                         ("NONDETERMINISM_PATTERNS", rs.NONDETERMINISM_PATTERNS),
                         ("TEST_NETWORK_PATTERNS", rs.TEST_NETWORK_PATTERNS),
+                        ("SCAN_CALL_PATTERNS", rs.SCAN_CALL_PATTERNS),
+                        ("SCAN_FLOOR_PATTERNS", rs.SCAN_FLOOR_PATTERNS),
                         ("DEPRECATED_PATTERNS", rs.DEPRECATED_PATTERNS),
                         ("PRINT_CALL_PATTERNS", rs.PRINT_CALL_PATTERNS),
                         ("INLINE_TEST_PATTERNS", rs.INLINE_TEST_PATTERNS)):
@@ -822,6 +861,7 @@ def collect_findings(root: Path) -> list[Finding]:
     check_layers(texts, findings)
     check_required_content(root, files, texts, findings)
     check_tests(texts, findings)
+    check_scan_floor(texts, findings)
     check_property_tests(texts, findings)
     check_gates_registry(root, findings)
     check_phase_table(root, findings)

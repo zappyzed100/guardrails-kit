@@ -24,7 +24,7 @@
 
 | 区分 | 行 |
 |---|---|
-| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／**ソース⇔doc 対応表（doc-impact-undeclared — §3.4 検査9・v2.63 soft 導入。既定3件は `repo_scan.py` の `DOC_IMPACT_RULES` にキット原本の実パスで同梱済み＝列は確認のみ、採用先固有の対応があれば加算追記。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
+| 静的（表A） | 整形（冪等）／**編集直後 lint（単一ファイル・3秒予算の判定系 — §1 第2段。収まらない言語は「該当なし（push 段で回収）」と明記）**／静的解析／lint昇格（print系・空catch を error化）／テスト／print系直呼びパターン／ログ単一出口の置き場所／公開シンボル抽出／import・参照抽出／テスト内 sleep・非決定・**外部I/O** パターン／**走査型テストの件数下限（scan-without-floor — §3.3・v2.66 soft。`SCAN_CALL_PATTERNS`／`SCAN_FLOOR_PATTERNS`。「空集合の上の緑」の検出——実測件数の等値ピンが上位互換で推奨・免除は `SCAN-FLOOR-EXEMPT: 理由`）**／**非推奨・世代交代パターン（deprecated-api — §3.3・v2.6。下の出典規律に従う）**／テストファイル判別／**単一テストファイル実行（red-first — §5・v2.7。`SINGLE_TEST_COMMAND`・実行位置が下層なら `SINGLE_TEST_CWD`。単独実行が構造的に不能な言語は「該当なし＋代替」を判断ごと記録）**／**依存マニフェスト（ファイル名＋依存セクション — §3.4 検査4。既定4種は `repo_scan.py` の `DEPENDENCY_MANIFESTS` に同梱済み＝列は確認のみ、独自エコシステムなら加算追記）**／**設計根拠の対象レイヤー（feat-without-plan — §3.4 検査5。v2.6 soft 導入・v2.8 hard 昇格＝G14。`PLAN_LAYER_ROOTS`）**／**ログ境界パターン＋ログ呼び出しパターン（missing-log-coverage — §8.4・v2.19 soft 導入。`LOG_BOUNDARY_PATTERNS`／`LOG_CALL_PATTERN`。下の出典規律に従う）**／**ソース⇔doc 対応表（doc-impact-undeclared — §3.4 検査9・v2.63 soft 導入。既定3件は `repo_scan.py` の `DOC_IMPACT_RULES` にキット原本の実パスで同梱済み＝列は確認のみ、採用先固有の対応があれば加算追記。下の出典規律に従う）**／生成物パターン／ヘッダー書式（共通: `<ファイル名> — 役割`） |
 | ランタイム（表D — §12） | `up`／`reset`（seed込み）／`seed`／`time`（時刻注入）／`db`（DB読み）／`e2e`／操作レール（実UI操作の手段）／観察レール（コンソール・ネットワーク・ログの読み方）／UIテストID検査（`ui-missing-testid`）／外部I/Oシームの置き場所 |
 | paste-block | `scripts/repo_scan.py` BINDING／`scripts/dev.py` COMMANDS／`post_edit_format.py` DISPATCH／**`post_edit_lint.py` DISPATCH（v2.5導入・v2.24でPython化）**／pre-push フック群／CI ジョブ群（E2E含む）／`.mcp.json`（操作レールがMCPの列のみ） |
 
@@ -135,8 +135,12 @@ Biome、Goを触るならgofmtを、Pythonフックから普通に呼べばよ�
 
 ---
 
-## 列: ts-react-web@13 — TypeScript + React（Web/PWA・Vite・Supabase想定）【要実測】
+## 列: ts-react-web@14 — TypeScript + React（Web/PWA・Vite・Supabase想定）【要実測】
 
+> @14（v2.66）: 「走査型テストの件数下限」の1行と paste-block 4行
+>（`SCAN_CALL_PATTERNS`/`SCAN_FLOOR_PATTERNS` — §3.3 scan-without-floor・Phase 67）を追加。
+> 列DoDへ `scan-without-floor` 1ケース（`requires` 付き）を追加し、**fill 一時適用（本列）で
+> DOD:PASS・除去後沈黙を実測**（Phase 67）。
 > @13（v2.52）: CI外部ActionをコミットSHA固定。存在しなかった`supabase/setup-cli@v1`を
 > 公式READMEの現行v3（v3.0.0 commit）へ是正。
 >
@@ -183,6 +187,7 @@ Biome、Goを触るならgofmtを、Pythonフックから普通に呼べばよ�
 | ログ呼び出しパターン | `logOp\(`（`LOG_CALL_PATTERN` — サンプル実装と契約テストは下記） |
 | テスト内 非決定 | `Date.now(` ・ `new Date()`（引数なし）・ `Math.random(`（Clock/seed注入で代替） |
 | テスト内 外部I/O | `fetch(` `axios` `XMLHttpRequest`（フェイク/記録済みフィクスチャを注入） |
+| 走査型テストの件数下限 | 走査=`readdirSync(` `globby(` `fg.sync(`/`fg.glob(`⇔下限=`.toBeGreaterThan(` `.toHaveLength(` `.length).toBe(`（scan-without-floor — §3.3 v2.66 soft。等値ピン推奨。免除は `SCAN-FLOOR-EXEMPT: 理由`） |
 | 非推奨・世代交代パターン | `@supabase/auth-helpers-nextjs` の import（公式非推奨——`@supabase/ssr` へ移行。Supabase 公式 AI プロンプトの生成禁止指定＝出典①②）。**サーバー側 `getSession(`→`getUser()` は本列では対象外**——本列はブラウザ SPA で、クライアントの `getSession()` は正規 API のため偽陽性>価値（Phase 15 の基準。SSR / Edge Functions を持つ列を起こす時にそちらへ載せる——判断ごと記録） |
 | テスト判別 | `\.test\.tsx?$` ・ `^e2e/.*\.spec\.ts$`（**E2E specを含める＝fix⇔テスト対の対象 — G10**） |
 | テスト判別（インライン） | 該当なし（テストは別ファイル規約。Vitest の in-source testing（`import.meta.vitest`）は本列では不採用——採用するなら版上げで充填する） |
@@ -215,6 +220,12 @@ _TS_NONDET = [(re.compile(r"\bDate\.now\s*\("), "Date.now()（Clock抽象で注�
 NONDETERMINISM_PATTERNS[".ts"] = _TS_NONDET; NONDETERMINISM_PATTERNS[".tsx"] = _TS_NONDET
 _TS_NET = [(re.compile(r"\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b"), "fetch/axios/XHR")]
 TEST_NETWORK_PATTERNS[".ts"] = _TS_NET; TEST_NETWORK_PATTERNS[".tsx"] = _TS_NET
+_TS_SCAN = [(re.compile(r"\breaddirSync\s*\(|\bglobby\s*\(|\bfg\.(?:sync|glob)\s*\("),
+             "readdirSync/globby/fast-glob")]
+SCAN_CALL_PATTERNS[".ts"] = _TS_SCAN; SCAN_CALL_PATTERNS[".tsx"] = _TS_SCAN
+_TS_SCAN_FLOOR = [re.compile(r"\.toBeGreaterThan(?:OrEqual)?\s*\("),
+                  re.compile(r"\.toHaveLength\s*\("), re.compile(r"\.length\s*\)\s*\.toBe\s*\(")]
+SCAN_FLOOR_PATTERNS[".ts"] = _TS_SCAN_FLOOR; SCAN_FLOOR_PATTERNS[".tsx"] = _TS_SCAN_FLOOR
 _TS_PRINT = [(re.compile(r"\bconsole\.(log|info|debug)\s*\("), "console.*(")]
 PRINT_CALL_PATTERNS[".ts"] = _TS_PRINT; PRINT_CALL_PATTERNS[".tsx"] = _TS_PRINT
 LOG_EXIT_FILES |= {"src/lib/log.ts"}
@@ -457,8 +468,12 @@ describe("logOp", () => {
 
 ---
 
-## 列: python-uv@11 — Python（uv・CLI/バックエンド）【要実測】
+## 列: python-uv@12 — Python（uv・CLI/バックエンド）【要実測】
 
+> @12（v2.66）: 「走査型テストの件数下限」の1行と paste-block 2行
+>（`SCAN_CALL_PATTERNS`/`SCAN_FLOOR_PATTERNS` — §3.3 scan-without-floor・Phase 67）を追加。
+> 列DoDへ `scan-without-floor` 1ケース（`requires` 付き——未充填では SKIP(unfilled)）を追加し、
+> **fill 一時適用（本列）で DOD:PASS・除去後沈黙を実測**（Phase 67）。
 > @11（v2.52）: CI外部ActionをコミットSHA固定。
 
 > @10（v2.47）: pre-commit / CI の名前付き管理区画を機械充填し、rule-dodをCIへ配線。
@@ -503,6 +518,7 @@ describe("logOp", () => {
 | ログ呼び出しパターン | `log_op\(`（`LOG_CALL_PATTERN` — サンプル実装は下記） |
 | テスト内 非決定 | `time.time(` `datetime.now(` `random.random(` `random.randint(`（seed/Clock注入） |
 | テスト内 外部I/O | `requests.` `httpx.` `urllib.request` |
+| 走査型テストの件数下限 | 走査=`.glob(` `.rglob(` `.iterdir(` `os.listdir(` `os.walk(` `os.scandir(`⇔下限=`assert len(` `assertGreater(` `len(...) >=/== 定数`（scan-without-floor — §3.3 v2.66 soft。実測件数の等値ピンが上位互換で推奨。免除は `SCAN-FLOOR-EXEMPT: 理由`） |
 | 非推奨・世代交代パターン | `utcnow(`・`utcfromtimestamp(`（Python 3.12 で公式非推奨＝出典②。代替: `datetime.now(timezone.utc)` / `datetime.fromtimestamp(ts, timezone.utc)`） |
 | テスト判別 | `^tests/` ・ `_test\.py$` ・ `test_.*\.py$` |
 | テスト判別（インライン） | 該当なし（pytest はテストを別ファイルに置く規約。doctest は回帰テストの受け皿として本列では不採用——採用するなら版上げで充填する） |
@@ -527,6 +543,12 @@ NONDETERMINISM_PATTERNS[".py"] = [
     (re.compile(r"\brandom\.(random|randint|choice)\s*\("), "seedなし乱数（Random(seed)を注入する）")]
 TEST_NETWORK_PATTERNS[".py"] = [
     (re.compile(r"\brequests\.|\bhttpx\.|\burllib\.request"), "requests/httpx/urllib")]
+SCAN_CALL_PATTERNS[".py"] = [(re.compile(
+    r"\.(?:glob|rglob|iterdir)\s*\(|\bos\.(?:listdir|walk|scandir)\s*\("),
+    "glob/rglob/iterdir/listdir/walk/scandir")]
+SCAN_FLOOR_PATTERNS[".py"] = [re.compile(r"\bassert\s+len\s*\("),
+                              re.compile(r"\bassertGreater(?:Equal)?\s*\("),
+                              re.compile(r"\blen\s*\([^)\n]*\)\s*(?:>=?|==)\s*[1-9]")]
 PRINT_CALL_PATTERNS[".py"] = [(re.compile(r"(?<![\w.])print\s*\("), "print(")]
 LOG_BOUNDARY_PATTERNS[".py"] = [
     (re.compile(r"\brequests\.(get|post|put|delete|patch)\s*\(|\bhttpx\.(get|post|put|delete|patch)\s*\("),
@@ -718,7 +740,12 @@ fail——性質が実際にバグを捕まえることの確認（テストの�
 
 ---
 
-## 列: dart-flutter@9 — Dart（Flutter・app/ 層）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+## 列: dart-flutter@10 — Dart（Flutter・app/ 層）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+
+> @10（v2.66）: 「走査型テストの件数下限」の1行と paste-block 2行
+>（`SCAN_CALL_PATTERNS`/`SCAN_FLOOR_PATTERNS` — §3.3 scan-without-floor・Phase 67）を追加。
+> 列DoDへ `scan-without-floor` 1ケース（`requires` 付き）を追加し、**fill 一時適用（本列）で
+> DOD:PASS・除去後沈黙を実測**（Phase 67）。
 
 > @9（v2.52）: CI外部ActionをコミットSHA固定。
 
@@ -747,6 +774,7 @@ fail——性質が実際にバグを捕まえることの確認（テストの�
 | print系直呼び | `debugPrint(` `print(`（出口: `app/lib/services/log.dart` の `logOp`） |
 | テスト内 非決定 | `DateTime.now()`・引数なし `Random()` |
 | テスト内 外部I/O | `http.get(` `http.post(` `HttpClient(`（フェイク注入） |
+| 走査型テストの件数下限 | 走査=`.list(`/`.listSync(`（Directory走査）⇔下限=`expect(....length` `expect(....isNotEmpty`（scan-without-floor — §3.3 v2.66 soft。等値ピン推奨。免除は `SCAN-FLOOR-EXEMPT: 理由`） |
 | テスト判別 | `^app/test/`・`^app/integration_test/`・`_test\.dart$` |
 | テスト判別（インライン） | 該当なし（テストは `test/`・`integration_test/` の別ファイル規約のみ） |
 | 単一テストファイル実行 | `flutter test {file}`（`SINGLE_TEST_CWD = "app"`——{file} は app/ 相対に展開。rust 併用時は dart 側を配線し engine/ のテストは対象外1行で見える — §5。red-first ジョブの BINDING: `subosito/flutter-action@v2`）【要実測】 |
@@ -772,6 +800,8 @@ NONDETERMINISM_PATTERNS[".dart"] = [
     (re.compile(r"\bDateTime\.now\s*\("), "DateTime.now()（時刻は固定値/Clock抽象で注入する）"),
     (re.compile(r"\bRandom\s*\(\s*\)"), "seed なし Random()（Random(42) のように seed を固定する）")]
 TEST_NETWORK_PATTERNS[".dart"] = [(re.compile(r"\bhttp\.(get|post)\s*\(|\bHttpClient\s*\("), "http直呼び")]
+SCAN_CALL_PATTERNS[".dart"] = [(re.compile(r"\.list(?:Sync)?\s*\("), "Directory.list/listSync")]
+SCAN_FLOOR_PATTERNS[".dart"] = [re.compile(r"expect\s*\([^\n]*\.(?:length|isNotEmpty)")]
 PRINT_CALL_PATTERNS[".dart"] = [(re.compile(r"\bdebugPrint\s*\("), "debugPrint("),
                                 (re.compile(r"(?<![\w.$])print\s*\("), "print(")]
 LOG_EXIT_FILES |= {"app/lib/services/log.dart"}
@@ -897,7 +927,12 @@ void logOp(
 
 ---
 
-## 列: rust@10 — Rust（engine/ 層・ソルバー等）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+## 列: rust@11 — Rust（engine/ 層・ソルバー等）【ゲート系=移植元で実測済み／ランタイム系=要実測】
+
+> @11（v2.66）: 「走査型テストの件数下限」の1行と paste-block 2行
+>（`SCAN_CALL_PATTERNS`/`SCAN_FLOOR_PATTERNS` — §3.3 scan-without-floor・Phase 67）を追加。
+> 列DoDへ `scan-without-floor` 1ケース（`requires` 付き）を追加し、**fill 一時適用（本列）で
+> DOD:PASS・除去後沈黙を実測**（Phase 67）。
 
 > @10（v2.52）: CI外部ActionをコミットSHA固定。`rust-toolchain@stable`の意味は
 > SHA固定後も`with: { toolchain: stable }`で明示的に維持。
@@ -935,6 +970,7 @@ void logOp(
 | print系直呼び | `println!` `eprintln!` `dbg!`（出口: `engine/src/logging.rs`） |
 | テスト内 非決定 | `thread_rng`・`SystemTime::now` |
 | テスト内 外部I/O | `reqwest::`・`std::net::TcpStream` |
+| 走査型テストの件数下限 | 走査=`read_dir(` `glob(`⇔下限=`assert!`/`assert_eq!` に `len(`/`count(` を含む行（scan-without-floor — §3.3 v2.66 soft。等値ピン推奨。免除は `SCAN-FLOOR-EXEMPT: 理由`） |
 | テスト判別 | `^engine/tests/`・`_test\.rs$`・`(^|/)tests/[^/]+\.rs$` |
 | テスト判別（インライン） | `#\[cfg\(test\)\]`・`#\[(\w+::)?test\]`（同一ファイル内 `#[cfg(test)] mod` 形式——ステージ済み diff の追加行照合。`(\w+::)?` は `#[tokio::test]` 等の属性マクロ形も拾う） |
 | 単一テストファイル実行 | 該当なし（モジュール内 `#[cfg(test)]` の単独実行が構造的に不能。代替: 統合テスト（`engine/tests/`）限定なら `cargo test --test <名前>` が可——ファイル名でなくテスト名を取るためスロットのトークン拡張が要り、必要になった時に版上げで検討。dart 併用構成では dart 側の配線が優先され、rust テストは対象外1行で見える — §5） |
@@ -959,6 +995,8 @@ NONDETERMINISM_PATTERNS[".rs"] = [
     (re.compile(r"\bthread_rng\b"), "thread_rng（seed 固定の乱数生成器を使う）"),
     (re.compile(r"\bSystemTime::now\b"), "SystemTime::now（時刻は引数で注入する）")]
 TEST_NETWORK_PATTERNS[".rs"] = [(re.compile(r"\breqwest::|\bTcpStream\b"), "reqwest/TcpStream")]
+SCAN_CALL_PATTERNS[".rs"] = [(re.compile(r"\bread_dir\s*\(|\bglob\s*\(\s*\""), "read_dir/glob")]
+SCAN_FLOOR_PATTERNS[".rs"] = [re.compile(r"assert(?:_eq|_ne)?!\s*\([^\n]*\b(?:len|count)\s*\(")]
 PRINT_CALL_PATTERNS[".rs"] = [(re.compile(r"\bprintln!\s*\("), "println!"),
                               (re.compile(r"\beprintln!\s*\("), "eprintln!"),
                               (re.compile(r"\bdbg!\s*\("), "dbg!")]

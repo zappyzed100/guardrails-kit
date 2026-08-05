@@ -596,6 +596,20 @@ NONDETERMINISM_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 # --- テスト内 外部I/O（§9.5 test-network: 外部I/Oの検疫。列充填）---
 TEST_NETWORK_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
 
+# --- 走査型テストの件数下限（§3.3 scan-without-floor — v2.66・Phase 67・soft。列充填）---
+# 「空集合の上の緑」（走査対象が0件になってもテストが空虚に合格し続ける）の検出。
+# テストファイル内にディレクトリ走査呼び出し（SCAN_CALL_PATTERNS——キー=拡張子）があるのに、
+# 件数下限/実測ピンとみなせる assert（SCAN_FLOOR_PATTERNS）も `SCAN-FLOOR-EXEMPT: 理由`
+# コメントも**同一ファイル内**に無ければ soft 警告する（判定はファイル単位——行近傍への
+# 厳密化は採用先の偽陽性実測後 — §7.4 の近似の流儀）。binding-dead-pattern / binding-dead-path
+# がバインディング変数の定義域空化を守るのに対し、こちらはテストコード自身の走査ループの
+# 定義域を守る（G9）。下限が守るのは「0件で緑にならない」まで——「意図した部分集合を走査
+# しているか」は判定不能で、実測件数の等値ピン留めが上位互換（カタログ注記で推奨。
+# 免除は存在検査のみ・理由の妥当性は検査しない——NO-LOG: と同じ境界）。
+SCAN_CALL_PATTERNS: dict[str, list[tuple[re.Pattern, str]]] = {}
+SCAN_FLOOR_PATTERNS: dict[str, list[re.Pattern]] = {}
+SCAN_FLOOR_EXEMPT_PATTERN = re.compile(r"SCAN-FLOOR-EXEMPT:\s*\S")
+
 # --- 非決定性テストの免除（test-sleep/test-nondeterminism/test-network 共通 —
 # §9.5・v2.25・Phase 35）---
 # 非決定性の再現そのものがテストの本質という正当なケースがある（例: 実ブラウザが
@@ -798,6 +812,8 @@ GATE_REGISTRY: list[tuple[str, str, str, str, str]] = [
     ("test-nondeterminism", "§3.3 コミット時", "var:NONDETERMINISM_PATTERNS", "HARD",
      "テスト内の時刻・seed なし乱数の検出"),
     ("test-network", "§3.3 コミット時", "var:TEST_NETWORK_PATTERNS", "HARD", "テスト内の外部 I/O 直呼びの検出"),
+    ("scan-without-floor", "§3.3 コミット時", "var:SCAN_CALL_PATTERNS", "SOFT",
+     "走査型テストに件数下限 assert が無い——「空集合の上の緑」の検出（soft）"),
     ("test-calls-solver-direct", "§3.3 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS", "HARD",
      "ソルバー直呼びテストの拒否（solve_for_test 経由のみ — §9.1）"),
     ("missing-property-test", "§9.6 コミット時", "var:SOLVER_DIRECT_CALL_PATTERNS", "SOFT",
