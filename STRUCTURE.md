@@ -58,6 +58,9 @@
 - `docs/plans/2026-07-14-harness-tools-import.md`
 - `docs/plans/2026-07-15-test-log-3layer-rails.md`
 - `docs/plans/2026-07-28-doc-impact-check.md`
+- `docs/plans/2026-08-05-gate-severity-contract.md`
+- `docs/plans/2026-08-05-scan-floor-assert.md`
+- `docs/plans/2026-08-05-soft-ratchet.md`
 - `docs/plans/PLAN_FORMAT.md`
 
 ## `scripts/`
